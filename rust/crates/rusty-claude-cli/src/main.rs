@@ -16,6 +16,7 @@
 )]
 mod init;
 mod input;
+mod interrupt;
 mod render;
 mod setup_wizard;
 
@@ -7822,7 +7823,7 @@ impl LiveCli {
   \x1b[2mDirectory\x1b[0m        {}\n\
   \x1b[2mSession\x1b[0m          {}\n\
   \x1b[2mAuto-save\x1b[0m        {}\n\n\
-  Type \x1b[1m/help\x1b[0m for commands · \x1b[1m/status\x1b[0m for live context · \x1b[2m/resume latest\x1b[0m jumps back to the newest session · \x1b[1m/diff\x1b[0m then \x1b[1m/commit\x1b[0m to ship · \x1b[2mTab\x1b[0m for workflow completions · \x1b[2mShift+Enter\x1b[0m for newline",
+  Type \x1b[1m/help\x1b[0m for commands · \x1b[1m/status\x1b[0m for live context · \x1b[2m/resume latest\x1b[0m jumps back to the newest session · \x1b[1m/diff\x1b[0m then \x1b[1m/commit\x1b[0m to ship · \x1b[2mTab\x1b[0m for workflow completions · \x1b[2mShift+Enter\x1b[0m for newline · \x1b[2mEsc\x1b[0m interrupts a running turn",
             self.model,
             self.permission_mode.as_str(),
             git_branch,
@@ -7848,7 +7849,10 @@ impl LiveCli {
         &self,
         emit_output: bool,
         terminal_tail: TerminalTail,
-    ) -> Result<(BuiltRuntime, HookAbortMonitor), Box<dyn std::error::Error>> {
+    ) -> Result<
+        (BuiltRuntime, HookAbortMonitor, runtime::TurnInterruptSignal),
+        Box<dyn std::error::Error>,
+    > {
         let hook_abort_signal = runtime::HookAbortSignal::new();
         let turn_interrupt_signal = runtime::TurnInterruptSignal::new();
         let runtime = build_runtime(
@@ -7865,9 +7869,10 @@ impl LiveCli {
         )?
         .with_hook_abort_signal(hook_abort_signal.clone())
         .with_turn_interrupt_signal(turn_interrupt_signal.clone());
-        let hook_abort_monitor = HookAbortMonitor::spawn(hook_abort_signal, turn_interrupt_signal);
+        let hook_abort_monitor =
+            HookAbortMonitor::spawn(hook_abort_signal, turn_interrupt_signal.clone());
 
-        Ok((runtime, hook_abort_monitor))
+        Ok((runtime, hook_abort_monitor, turn_interrupt_signal))
     }
 
     fn replace_runtime(&mut self, runtime: BuiltRuntime) -> Result<(), Box<dyn std::error::Error>> {
@@ -7878,25 +7883,31 @@ impl LiveCli {
 
     fn run_turn(&mut self, input: &str) -> Result<(), Box<dyn std::error::Error>> {
         let terminal_tail = TerminalTail::new();
-        let (mut runtime, hook_abort_monitor) =
+        let (mut runtime, hook_abort_monitor, turn_interrupt_signal) =
             self.prepare_turn_runtime(true, terminal_tail.clone())?;
+        let mut permission_prompter = CliPermissionPrompter::new(self.permission_mode);
+        let mut escape_monitor = None;
+        if let Some((monitor, stdin_gate)) =
+            interrupt::EscapeInterruptMonitor::spawn(turn_interrupt_signal)
+        {
+            permission_prompter = permission_prompter.with_stdin_gate(stdin_gate);
+            escape_monitor = Some(monitor);
+        }
         let mut spinner = Spinner::new();
         let mut stdout = io::stdout();
-        // The animated frame is cursor control: it saves the cursor, rewrites the
-        // current line, and restores the cursor. None of that describes anything
-        // when stdout is a pipe — the escapes survive as literal bytes and the
-        // banner ends up glued to whatever the emitter writes next. Only animate
-        // on a terminal; the one-shot completion line below is plain text and is
-        // emitted either way.
-        if io::stdout().is_terminal() {
-            spinner.tick(
-                "🦀 Thinking...",
-                TerminalRenderer::new().color_theme(),
-                &mut stdout,
-            )?;
-        }
-        let mut permission_prompter = CliPermissionPrompter::new(self.permission_mode);
+        spinner.tick(
+            if escape_monitor.is_some() {
+                "🦀 Thinking... (esc to interrupt)"
+            } else {
+                "🦀 Thinking..."
+            },
+            TerminalRenderer::new().color_theme(),
+            &mut stdout,
+        )?;
         let result = runtime.run_turn(input, Some(&mut permission_prompter));
+        if let Some(monitor) = escape_monitor {
+            monitor.stop();
+        }
         hook_abort_monitor.stop();
         match result {
             Ok(summary) => {
@@ -8051,7 +8062,7 @@ impl LiveCli {
                         *self.runtime.session_mut() = result.compacted_session.clone();
 
                         // Build a new runtime with the compacted session and retry
-                        let (mut new_runtime, hook_abort_monitor) =
+                        let (mut new_runtime, hook_abort_monitor, _turn_interrupt_signal) =
                             self.prepare_turn_runtime(true, terminal_tail.clone())?;
                         drop(hook_abort_monitor);
 
@@ -8144,7 +8155,7 @@ impl LiveCli {
     }
 
     fn run_prompt_compact(&mut self, input: &str) -> Result<(), Box<dyn std::error::Error>> {
-        let (mut runtime, hook_abort_monitor) =
+        let (mut runtime, hook_abort_monitor, _turn_interrupt_signal) =
             self.prepare_turn_runtime(false, TerminalTail::new())?;
         let mut permission_prompter = CliPermissionPrompter::new(self.permission_mode);
         let result = runtime.run_turn(input, Some(&mut permission_prompter));
@@ -8158,7 +8169,7 @@ impl LiveCli {
     }
 
     fn run_prompt_compact_json(&mut self, input: &str) -> Result<(), Box<dyn std::error::Error>> {
-        let (mut runtime, hook_abort_monitor) =
+        let (mut runtime, hook_abort_monitor, _turn_interrupt_signal) =
             self.prepare_turn_runtime(false, TerminalTail::new())?;
         let mut permission_prompter = CliPermissionPrompter::new(self.permission_mode);
         let result = runtime.run_turn(input, Some(&mut permission_prompter));
@@ -8184,7 +8195,7 @@ impl LiveCli {
     }
 
     fn run_prompt_json(&mut self, input: &str) -> Result<(), Box<dyn std::error::Error>> {
-        let (mut runtime, hook_abort_monitor) =
+        let (mut runtime, hook_abort_monitor, _turn_interrupt_signal) =
             self.prepare_turn_runtime(false, TerminalTail::new())?;
         let mut permission_prompter = CliPermissionPrompter::new(self.permission_mode);
         let result = runtime.run_turn(input, Some(&mut permission_prompter));
@@ -9747,6 +9758,7 @@ fn render_repl_help() -> String {
         "  Ctrl-R               Reverse-search prompt history".to_string(),
         "  Tab                  Complete commands, modes, and recent sessions".to_string(),
         "  Ctrl-C               Clear input (or exit on empty prompt)".to_string(),
+        "  Esc                  Interrupt the running turn".to_string(),
         "  Shift+Enter/Ctrl+J   Insert a newline".to_string(),
         "  Auto-save            .claw/sessions/<workspace-fingerprint>/<session-id>.jsonl"
             .to_string(),
@@ -12799,11 +12811,20 @@ impl runtime::HookProgressReporter for CliHookProgressReporter {
 
 struct CliPermissionPrompter {
     current_mode: PermissionMode,
+    stdin_gate: Option<interrupt::StdinPromptGate>,
 }
 
 impl CliPermissionPrompter {
     fn new(current_mode: PermissionMode) -> Self {
-        Self { current_mode }
+        Self {
+            current_mode,
+            stdin_gate: None,
+        }
+    }
+
+    fn with_stdin_gate(mut self, stdin_gate: interrupt::StdinPromptGate) -> Self {
+        self.stdin_gate = Some(stdin_gate);
+        self
     }
 }
 
@@ -12812,6 +12833,12 @@ impl runtime::PermissionPrompter for CliPermissionPrompter {
         &mut self,
         request: &runtime::PermissionRequest,
     ) -> runtime::PermissionPromptDecision {
+        // Take stdin back from the Esc listener (restoring canonical
+        // mode) for the duration of this line-based prompt.
+        let _stdin_lease = self
+            .stdin_gate
+            .as_ref()
+            .map(interrupt::StdinPromptGate::lease);
         println!();
         println!("Permission approval required");
         println!("  Tool             {}", request.tool_name);
