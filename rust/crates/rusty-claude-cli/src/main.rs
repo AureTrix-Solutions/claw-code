@@ -13242,8 +13242,8 @@ fn format_context_window_blocked_error(session_id: &str, error: &api::ApiError) 
             ));
             lines.push(format!("  Context window   {context_window_tokens} tokens"));
         }
-        api::ApiError::Api { message, body, .. } => {
-            let detail = message.as_deref().unwrap_or(body).trim();
+        api::ApiError::Api(details) => {
+            let detail = details.message.as_deref().unwrap_or(&details.body).trim();
             if !detail.is_empty() {
                 lines.push(format!(
                     "  Detail           {}",
@@ -13253,7 +13253,9 @@ fn format_context_window_blocked_error(session_id: &str, error: &api::ApiError) 
         }
         api::ApiError::RetriesExhausted { last_error, .. } => {
             let detail = match last_error.as_ref() {
-                api::ApiError::Api { message, body, .. } => message.as_deref().unwrap_or(body),
+                api::ApiError::Api(details) => {
+                    details.message.as_deref().unwrap_or(&details.body)
+                }
                 other => return format_context_window_blocked_error(session_id, other),
             }
             .trim();
@@ -14556,7 +14558,7 @@ mod tests {
         SessionLifecycleSummary, SlashCommand, StatusUsage, TerminalTail, TmuxPaneSnapshot,
         DEFAULT_MODEL, LATEST_SESSION_REFERENCE, STUB_COMMANDS,
     };
-    use api::{ApiError, MessageResponse, OutputContentBlock, Usage};
+    use api::{ApiError, ApiErrorDetails, MessageResponse, OutputContentBlock, Usage};
     use plugins::{
         PluginManager, PluginManagerConfig, PluginTool, PluginToolDefinition, PluginToolPermission,
     };
@@ -14601,7 +14603,7 @@ mod tests {
 
     #[test]
     fn opaque_provider_wrapper_surfaces_failure_class_session_and_trace() {
-        let error = ApiError::Api {
+        let error = ApiError::Api(Box::new(ApiErrorDetails {
             status: "500".parse().expect("status"),
             error_type: Some("api_error".to_string()),
             message: Some(
@@ -14613,7 +14615,7 @@ mod tests {
             retryable: true,
             suggested_action: None,
             retry_after: None,
-};
+}));
 
         let rendered = format_user_visible_api_error("session-issue-22", &error);
         assert!(rendered.contains("provider_internal"));
@@ -14625,7 +14627,7 @@ mod tests {
     fn retry_exhaustion_uses_retry_failure_class_for_generic_provider_wrapper() {
         let error = ApiError::RetriesExhausted {
             attempts: 3,
-            last_error: Box::new(ApiError::Api {
+            last_error: Box::new(ApiError::Api(Box::new(ApiErrorDetails {
                 status: "502".parse().expect("status"),
                 error_type: Some("api_error".to_string()),
                 message: Some(
@@ -14637,7 +14639,7 @@ mod tests {
                 retryable: true,
                 suggested_action: None,
                 retry_after: None,
-}),
+}))),
         };
 
         let rendered = format_user_visible_api_error("session-issue-22", &error);
@@ -14690,7 +14692,7 @@ mod tests {
 
     #[test]
     fn provider_context_window_errors_are_reframed_with_same_guidance() {
-        let error = ApiError::Api {
+        let error = ApiError::Api(Box::new(ApiErrorDetails {
             status: "400".parse().expect("status"),
             error_type: Some("invalid_request_error".to_string()),
             message: Some(
@@ -14702,7 +14704,7 @@ mod tests {
             retryable: false,
             suggested_action: None,
             retry_after: None,
-};
+}));
 
         let rendered = format_user_visible_api_error("session-issue-32", &error);
         assert!(rendered.contains("context_window_blocked"), "{rendered}");
@@ -14724,7 +14726,7 @@ mod tests {
 
     #[test]
     fn openai_configured_limit_errors_are_rendered_as_context_window_guidance() {
-        let error = ApiError::Api {
+        let error = ApiError::Api(Box::new(ApiErrorDetails {
             status: "400".parse().expect("status"),
             error_type: Some("invalid_request_error".to_string()),
             message: Some(
@@ -14736,7 +14738,7 @@ mod tests {
             retryable: false,
             suggested_action: None,
             retry_after: None,
-        };
+        }));
 
         let rendered = format_user_visible_api_error("session-issue-32", &error);
         assert!(rendered.contains("Context window blocked"), "{rendered}");
@@ -14762,7 +14764,7 @@ mod tests {
     fn retry_wrapped_context_window_errors_keep_recovery_guidance() {
         let error = ApiError::RetriesExhausted {
             attempts: 2,
-            last_error: Box::new(ApiError::Api {
+            last_error: Box::new(ApiError::Api(Box::new(ApiErrorDetails {
                 status: "413".parse().expect("status"),
                 error_type: Some("invalid_request_error".to_string()),
                 message: Some("Request is too large for this model's context window.".to_string()),
@@ -14771,7 +14773,7 @@ mod tests {
                 retryable: false,
                 suggested_action: None,
                 retry_after: None,
-            }),
+            }))),
         };
 
         let rendered = format_user_visible_api_error("session-issue-32", &error);
