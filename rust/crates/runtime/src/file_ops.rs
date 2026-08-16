@@ -883,13 +883,9 @@ mod tests {
 
     use super::{
         component_contains_glob, derive_glob_walk_root, edit_file, expand_braces, glob_search,
-    use super::{
-        component_contains_glob, derive_glob_walk_root, edit_file, expand_braces, glob_search,
         grep_search, is_symlink_escape, max_read_chars, normalize_for_comparison, read_file,
         read_file_in_workspace, write_file, write_file_in_workspace, GrepSearchInput,
-        DEFAULT_MAX_READ_CHARS, DEFAULT_READ_LINES, MAX_READ_CHARS, MAX_READ_CHARS_ENV_VAR,
-        MAX_WRITE_SIZE,
-    };
+        DEFAULT_MAX_READ_CHARS, DEFAULT_READ_LINES, MAX_READ_CHARS_ENV_VAR, MAX_WRITE_SIZE,
     };
 
     /// Serializes the tests that mutate `CLAW_MAX_READ_CHARS`; env vars are process-global.
