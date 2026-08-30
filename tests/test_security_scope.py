@@ -152,6 +152,20 @@ class WorkspacePathScopeTests(unittest.TestCase):
                 self.assertFalse(decision.allowed)
                 self.assertIn('outside workspace scope', decision.reason)
 
+    def test_symlink_resolving_to_unc_escape_mocked(self) -> None:
+        """Verify containment check denies links resolving to remote/UNC targets."""
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = Path(tmp) / 'workspace'
+            workspace.mkdir()
+            scope = WorkspacePathScope.from_root(workspace)
+
+            from unittest.mock import patch
+            unc_target = Path(r'\\remote-server\share\secret.txt')
+            with patch.object(Path, 'resolve', return_value=unc_target):
+                decision = scope.validate_path(str(workspace / 'net-link' / 'secret.txt'))
+                self.assertFalse(decision.allowed)
+                self.assertIn('outside workspace scope', decision.reason)
+
     def test_glob_expansion_must_stay_inside_workspace(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
