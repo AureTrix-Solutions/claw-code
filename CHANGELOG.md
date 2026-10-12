@@ -1,0 +1,47 @@
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [0.1.3] - 2026-10-13
+
+This is the first public binary release of Claw Code.
+
+### Added
+
+- Initial binary release for Linux x64, macOS arm64, and Windows x64
+- Full CLI implementation with session persistence and MCP support
+- Multi-provider support: Anthropic Claude, OpenAI, X.AI Grok, and OpenAI-compatible providers (Ollama, llama.cpp, vLLM)
+- 55 built-in tools: Bash, file I/O, editing, search, web access, agent delegation, and more
+- 120+ slash commands for configuration, help, and system operations
+- Permission system with support for workspace-write, read-only, and prompt-mode enforcement
+- Plugin system with manifest-driven plugin installation and management
+- Comprehensive session management with configuration loading and persistence
+- Dogfood build with build-time git provenance tracking
+
+### Fixed
+
+- Fixed duplicate assistant text in message rendering
+- Fixed Windows workspace path compatibility (support for multiple Windows path spellings)
+- Fixed session_id path traversal vulnerability in session store
+- Fixed untrusted project hooks in read-only mode
+- Fixed permission privilege ladder to use explicit rank ordering
+- Fixed Windows extended-path boundary handling
+- Fixed output ownership reporting on auto-compact retry paths
+
+### Changed
+
+- Reorganized permission system for improved clarity and consistency
+- Enhanced configuration system to support persistent provider configuration
+- Improved error handling and reporting throughout the runtime
+
+### Known Limitations
+
+- ACP / Zed integration is not yet implemented (status stub available via `claw acp`)
+- Python porting workspace is for reference only, not used in production
+
+## Pre-release
+
+This project has been in development as an agent-managed exhibit. Previous work is tracked in git history.
