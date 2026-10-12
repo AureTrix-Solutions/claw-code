@@ -20,6 +20,7 @@ pub mod green_contract;
 mod hooks;
 mod json;
 mod lane_events;
+pub mod line_range_selector;
 pub mod lsp_client;
 mod mcp;
 mod mcp_client;
