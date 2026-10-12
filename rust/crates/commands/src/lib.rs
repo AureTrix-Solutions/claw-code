@@ -5297,6 +5297,60 @@ fn mcp_server_json(name: &str, server: &ScopedMcpServerConfig) -> Value {
     })
 }
 
+fn render_session_status(session: &Session) -> String {
+    let message_count = session.messages.len();
+    let mut total_input = 0u32;
+    let mut total_output = 0u32;
+    for msg in &session.messages {
+        if let Some(usage) = msg.usage {
+            total_input = total_input.saturating_add(usage.input_tokens);
+            total_output = total_output.saturating_add(usage.output_tokens);
+        }
+    }
+    format!(
+        "Session {}: {} messages, {} input tokens, {} output tokens",
+        &session.session_id[0..8],
+        message_count,
+        total_input,
+        total_output
+    )
+}
+
+fn render_token_cost(session: &Session) -> String {
+    let mut total_input = 0u32;
+    let mut total_output = 0u32;
+    let mut cache_creation = 0u32;
+    let mut cache_read = 0u32;
+    for msg in &session.messages {
+        if let Some(usage) = msg.usage {
+            total_input = total_input.saturating_add(usage.input_tokens);
+            total_output = total_output.saturating_add(usage.output_tokens);
+            cache_creation = cache_creation.saturating_add(usage.cache_creation_input_tokens);
+            cache_read = cache_read.saturating_add(usage.cache_read_input_tokens);
+        }
+    }
+    format!(
+        "Cumulative token usage for this session:
+  Input tokens: {}
+  Output tokens: {}
+  Cache creation tokens: {}
+  Cache read tokens: {}
+  Total input: {}",
+        total_input,
+        total_output,
+        cache_creation,
+        cache_read,
+        total_input
+            .saturating_add(cache_creation)
+            .saturating_add(cache_read)
+    )
+}
+
+fn render_version_info() -> String {
+    let version = env!("CARGO_PKG_VERSION");
+    format!("claw-code version {}", version)
+}
+
 #[must_use]
 pub fn handle_slash_command(
     input: &str,
@@ -5334,8 +5388,19 @@ pub fn handle_slash_command(
             message: render_slash_command_help(),
             session: session.clone(),
         }),
-        SlashCommand::Status
-        | SlashCommand::Bughunter { .. }
+        SlashCommand::Status => Some(SlashCommandResult {
+            message: render_session_status(session),
+            session: session.clone(),
+        }),
+        SlashCommand::Cost => Some(SlashCommandResult {
+            message: render_token_cost(session),
+            session: session.clone(),
+        }),
+        SlashCommand::Version => Some(SlashCommandResult {
+            message: render_version_info(),
+            session: session.clone(),
+        }),
+        SlashCommand::Bughunter { .. }
         | SlashCommand::Commit
         | SlashCommand::Pr { .. }
         | SlashCommand::Issue { .. }
@@ -5346,7 +5411,6 @@ pub fn handle_slash_command(
         | SlashCommand::Model { .. }
         | SlashCommand::Permissions { .. }
         | SlashCommand::Clear { .. }
-        | SlashCommand::Cost
         | SlashCommand::Resume { .. }
         | SlashCommand::Config { .. }
         | SlashCommand::Workspace { .. }
@@ -5354,7 +5418,6 @@ pub fn handle_slash_command(
         | SlashCommand::Memory
         | SlashCommand::Init
         | SlashCommand::Diff
-        | SlashCommand::Version
         | SlashCommand::Export { .. }
         | SlashCommand::Session { .. }
         | SlashCommand::Plugins { .. }
@@ -6193,7 +6256,6 @@ mod tests {
     fn ignores_unknown_or_runtime_bound_slash_commands() {
         let session = Session::new();
         assert!(handle_slash_command("/unknown", &session, CompactionConfig::default()).is_none());
-        assert!(handle_slash_command("/status", &session, CompactionConfig::default()).is_none());
         assert!(handle_slash_command("/sandbox", &session, CompactionConfig::default()).is_none());
         assert!(
             handle_slash_command("/bughunter", &session, CompactionConfig::default()).is_none()
@@ -6225,7 +6287,6 @@ mod tests {
             handle_slash_command("/clear --confirm", &session, CompactionConfig::default())
                 .is_none()
         );
-        assert!(handle_slash_command("/cost", &session, CompactionConfig::default()).is_none());
         assert!(handle_slash_command(
             "/resume session.json",
             &session,
@@ -6244,7 +6305,6 @@ mod tests {
         );
         assert!(handle_slash_command("/mcp list", &session, CompactionConfig::default()).is_none());
         assert!(handle_slash_command("/diff", &session, CompactionConfig::default()).is_none());
-        assert!(handle_slash_command("/version", &session, CompactionConfig::default()).is_none());
         assert!(
             handle_slash_command("/export note.txt", &session, CompactionConfig::default())
                 .is_none()
@@ -7205,5 +7265,80 @@ mod tests {
 
         let _ = fs::remove_dir_all(config_home);
         let _ = fs::remove_dir_all(bundled_root);
+    }
+
+    #[test]
+    fn status_command_shows_session_info() {
+        use runtime::TokenUsage;
+
+        let mut session = Session::new();
+        session.messages.push(ConversationMessage {
+            role: MessageRole::User,
+            blocks: vec![ContentBlock::Text {
+                text: "hello".to_string(),
+            }],
+            usage: Some(TokenUsage {
+                input_tokens: 10,
+                output_tokens: 20,
+                cache_creation_input_tokens: 0,
+                cache_read_input_tokens: 0,
+            }),
+        });
+        session.messages.push(ConversationMessage {
+            role: MessageRole::Assistant,
+            blocks: vec![ContentBlock::Text {
+                text: "response".to_string(),
+            }],
+            usage: Some(TokenUsage {
+                input_tokens: 5,
+                output_tokens: 15,
+                cache_creation_input_tokens: 0,
+                cache_read_input_tokens: 0,
+            }),
+        });
+
+        let result = handle_slash_command("/status", &session, CompactionConfig::default())
+            .expect("/status should be handled");
+        assert!(result.message.contains("2 messages"));
+        assert!(result.message.contains("15 input tokens"));
+        assert!(result.message.contains("35 output tokens"));
+        assert_eq!(result.session, session);
+    }
+
+    #[test]
+    fn cost_command_shows_token_usage() {
+        use runtime::TokenUsage;
+
+        let mut session = Session::new();
+        session.messages.push(ConversationMessage {
+            role: MessageRole::User,
+            blocks: vec![ContentBlock::Text {
+                text: "hello".to_string(),
+            }],
+            usage: Some(TokenUsage {
+                input_tokens: 100,
+                output_tokens: 200,
+                cache_creation_input_tokens: 50,
+                cache_read_input_tokens: 25,
+            }),
+        });
+
+        let result = handle_slash_command("/cost", &session, CompactionConfig::default())
+            .expect("/cost should be handled");
+        assert!(result.message.contains("100"));
+        assert!(result.message.contains("200"));
+        assert!(result.message.contains("50"));
+        assert!(result.message.contains("25"));
+        assert!(result.message.contains("Cumulative token usage"));
+        assert_eq!(result.session, session);
+    }
+
+    #[test]
+    fn version_command_shows_version() {
+        let session = Session::new();
+        let result = handle_slash_command("/version", &session, CompactionConfig::default())
+            .expect("/version should be handled");
+        assert!(result.message.contains("claw-code version"));
+        assert_eq!(result.session, session);
     }
 }
