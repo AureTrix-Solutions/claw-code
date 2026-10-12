@@ -20,6 +20,7 @@ pub mod green_contract;
 mod hooks;
 mod json;
 mod lane_events;
+pub mod line_range_selector;
 pub mod lsp_client;
 mod mcp;
 mod mcp_client;
@@ -87,7 +88,8 @@ pub use conversation::{
 };
 pub use file_ops::{
     edit_file, edit_file_in_workspace, glob_search, glob_search_in_workspace, grep_search,
-    grep_search_in_workspace, read_file, read_file_in_workspace, write_file,
+    grep_search_in_workspace, read_file, read_file_in_workspace,
+    read_file_in_workspace_with_selector, read_file_with_selector, write_file,
     write_file_in_workspace, EditFileOutput, GlobSearchOutput, GrepSearchInput, GrepSearchOutput,
     ReadFileOutput, StructuredPatchHunk, TextFilePayload, WriteFileOutput,
 };
