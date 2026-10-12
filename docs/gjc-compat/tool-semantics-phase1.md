@@ -222,7 +222,7 @@ pub fn read_file_in_workspace(
 **Missing**:
 - ✗ Line range selectors (`:L-L+N` syntax)
 - ✗ Raw mode (`:raw`)
-- ✗ Git merge conflict extraction (`:conflicts`)
+- ✓ Git merge conflict extraction (`:conflicts`)
 - ✗ Truncation footers with recovery hints
 - ✗ Structural summarization (collapse braces)
 - ✗ Archive/SQLite support
@@ -272,7 +272,8 @@ pub fn read_file_in_workspace(
 
 ### Batch 1: READ Tool (Priority P0)
 - Add line range selector parsing
-- Implement `:raw` and `:conflicts` modes
+- Implement `:raw` mode
+- ✓ Implement `:conflicts` mode
 - Add truncation footers with recovery hints
 - Implement structural summarization
 - Add tests for all selector combinations
