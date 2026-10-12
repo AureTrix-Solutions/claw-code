@@ -8,7 +8,6 @@
 /// - `:5-16,960-973` = multiple ranges
 /// - `:raw` = full verbatim
 /// - `:conflicts` = git merge conflicts only
-
 use std::num::ParseIntError;
 
 /// Parsed line range specification.
@@ -36,12 +35,18 @@ pub struct LineRange {
 impl LineRange {
     /// Create a new line range (1-indexed).
     pub fn new(start_line: usize, end_line: usize) -> Self {
-        Self { start_line, end_line }
+        Self {
+            start_line,
+            end_line,
+        }
     }
 
     /// Convert to zero-indexed range for internal use.
     pub fn zero_indexed(&self) -> (usize, usize) {
-        (self.start_line.saturating_sub(1), self.end_line.saturating_sub(1))
+        (
+            self.start_line.saturating_sub(1),
+            self.end_line.saturating_sub(1),
+        )
     }
 
     /// Get the number of lines in this range.

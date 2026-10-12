@@ -2575,7 +2575,8 @@ fn run_read_file(input: ReadFileInput) -> Result<String, String> {
             input.limit,
             input.selector.as_deref(),
             &workspace,
-        ).map_err(io_to_string)?,
+        )
+        .map_err(io_to_string)?,
     )
 }
 
@@ -10704,8 +10705,7 @@ printf 'pwsh:%s' "$1"
         let root = temp_path("perm-read-selector");
         fs::create_dir_all(&root).expect("create root");
         let file = root.join("multi-line.txt");
-        fs::write(&file, "line1\nline2\nline3\nline4\nline5\n")
-            .expect("write test file");
+        fs::write(&file, "line1\nline2\nline3\nline4\nline5\n").expect("write test file");
         let original_dir = std::env::current_dir().expect("cwd");
         std::env::set_current_dir(&root).expect("set cwd");
 
@@ -10717,7 +10717,10 @@ printf 'pwsh:%s' "$1"
                 "selector": "2-4"
             }),
         );
-        assert!(result.is_ok(), "read_file with selector should succeed: {result:?}");
+        assert!(
+            result.is_ok(),
+            "read_file with selector should succeed: {result:?}"
+        );
 
         // Verify the output contains the expected lines
         let output: serde_json::Value =

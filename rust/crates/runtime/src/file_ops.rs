@@ -319,7 +319,7 @@ fn apply_line_selector(
 
             // Check if it's a contiguous range
             let is_contiguous = (last - first + 1) == indices.len();
-            
+
             if is_contiguous {
                 (first, last + 1, None)
             } else {
@@ -1295,13 +1295,9 @@ mod tests {
         )
         .expect("write should succeed");
 
-        let output = super::read_file_with_selector(
-            path.to_string_lossy().as_ref(),
-            None,
-            None,
-            Some("2"),
-        )
-        .expect("read with selector should succeed");
+        let output =
+            super::read_file_with_selector(path.to_string_lossy().as_ref(), None, None, Some("2"))
+                .expect("read with selector should succeed");
         assert_eq!(output.file.content, "line2");
         assert_eq!(output.file.start_line, 2);
         assert_eq!(output.file.num_lines, 1);
@@ -1379,13 +1375,9 @@ mod tests {
         )
         .expect("write should succeed");
 
-        let output = super::read_file_with_selector(
-            path.to_string_lossy().as_ref(),
-            None,
-            None,
-            None,
-        )
-        .expect("read with selector should succeed");
+        let output =
+            super::read_file_with_selector(path.to_string_lossy().as_ref(), None, None, None)
+                .expect("read with selector should succeed");
         assert_eq!(output.file.content, "line1\nline2\nline3\nline4\nline5");
         assert_eq!(output.file.start_line, 1);
         assert_eq!(output.file.num_lines, 5);
