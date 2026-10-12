@@ -20,7 +20,7 @@ use runtime::{
     lsp_client::LspRegistry,
     mcp_tool_bridge::McpToolRegistry,
     permission_enforcer::{EnforcementResult, PermissionEnforcer},
-    read_file_in_workspace,
+    read_file_in_workspace_with_selector,
     summary_compression::compress_summary_text,
     task_registry::TaskRegistry,
     team_cron_registry::{CronRegistry, TeamRegistry},
@@ -2569,8 +2569,13 @@ fn branch_divergence_output(
 fn run_read_file(input: ReadFileInput) -> Result<String, String> {
     let workspace = std::env::current_dir().map_err(|error| error.to_string())?;
     to_pretty_json(
-        read_file_in_workspace(&input.path, input.offset, input.limit, &workspace)
-            .map_err(io_to_string)?,
+        read_file_in_workspace_with_selector(
+            &input.path,
+            input.offset,
+            input.limit,
+            input.selector.as_deref(),
+            &workspace,
+        ).map_err(io_to_string)?,
     )
 }
 
@@ -2885,6 +2890,7 @@ struct ReadFileInput {
     path: String,
     offset: Option<usize>,
     limit: Option<usize>,
+    selector: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -10685,6 +10691,41 @@ printf 'pwsh:%s' "$1"
         let registry = read_only_registry();
         let result = registry.execute("read_file", &json!({ "path": file.display().to_string() }));
         assert!(result.is_ok(), "read_file should be allowed: {result:?}");
+
+        std::env::set_current_dir(&original_dir).expect("restore cwd");
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn given_read_only_enforcer_when_read_file_with_selector_then_succeeds() {
+        let _guard = env_lock()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let root = temp_path("perm-read-selector");
+        fs::create_dir_all(&root).expect("create root");
+        let file = root.join("multi-line.txt");
+        fs::write(&file, "line1\nline2\nline3\nline4\nline5\n")
+            .expect("write test file");
+        let original_dir = std::env::current_dir().expect("cwd");
+        std::env::set_current_dir(&root).expect("set cwd");
+
+        let registry = read_only_registry();
+        let result = registry.execute(
+            "read_file",
+            &json!({
+                "path": file.display().to_string(),
+                "selector": "2-4"
+            }),
+        );
+        assert!(result.is_ok(), "read_file with selector should succeed: {result:?}");
+
+        // Verify the output contains the expected lines
+        let output: serde_json::Value =
+            serde_json::from_str(&result.unwrap()).expect("json output");
+        let content = output["file"]["content"].as_str().expect("content field");
+        assert!(content.contains("line2"));
+        assert!(content.contains("line3"));
+        assert!(content.contains("line4"));
 
         std::env::set_current_dir(&original_dir).expect("restore cwd");
         let _ = fs::remove_dir_all(root);
