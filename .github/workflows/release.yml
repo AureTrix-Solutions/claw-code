@@ -57,7 +57,7 @@ jobs:
           mkdir -p dist
           cp "target/release/${{ matrix.bin }}" "dist/${{ matrix.artifact_name }}"
           chmod +x "dist/${{ matrix.artifact_name }}"
-          (cd dist && sha256sum "${{ matrix.artifact_name }}" > "${{ matrix.artifact_name }}.sha256")
+          (cd dist && (sha256sum "${{ matrix.artifact_name }}" 2>/dev/null || shasum -a 256 "${{ matrix.artifact_name }}") > "${{ matrix.artifact_name }}.sha256")
 
       - name: Upload workflow artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
