@@ -130,6 +130,25 @@ claw --model "mlx-community/Qwen2.5-Coder-7B-Instruct-4bit" prompt "Reply exactl
 
 mlx-lm serves models under their full Hugging Face repo ID. Use the exact `id` field from `curl $OPENAI_BASE_URL/models` for `--model`. A bare name like `qwen2.5-coder-7b-instruct` will fail model resolution before the request ever reaches the server.
 
+## OmniRoute and other remote OpenAI-compatible gateways
+
+[OmniRoute](https://github.com/diegosouzapw/OmniRoute) is a third-party OpenAI-compatible AI gateway that can route requests to multiple providers. To use any remote OpenAI-compatible gateway with Claw, set `OPENAI_BASE_URL` to the gateway's `/v1` endpoint and provide your API key:
+
+```bash
+export OPENAI_BASE_URL="https://api.omniroute.ai/v1"
+export OPENAI_API_KEY="your-omniroute-api-key"
+claw --model "gpt-4" prompt "Reply exactly HELLO_WORLD_123"
+```
+
+To find the available model IDs on your gateway, use the `/models` endpoint:
+
+```bash
+curl -sS "$OPENAI_BASE_URL/models" \
+  -H "Authorization: Bearer $OPENAI_API_KEY" | jq '.data[].id'
+```
+
+For local configuration, see your gateway's documentation for the correct base URL, API key format, and available model IDs. The same OPENAI_BASE_URL + OPENAI_API_KEY pattern applies to any OpenAI-compatible remote gateway.
+
 ## Local skills install from disk
 
 Skills are discovered from Claw skill roots such as `.claw/skills/` in a workspace and `~/.claw/skills/` for user-level installs. Legacy `.codex/skills/` roots may also be scanned for compatibility, but new local Claw projects should prefer `.claw/skills/`.
