@@ -251,10 +251,7 @@ pub fn read_file_with_selector(
     if selector == Some("conflicts") {
         let conflicts = extract_merge_conflicts(&lines);
         let (selected, num_lines) = if conflicts.is_empty() {
-            (
-                format!("No unresolved git merge conflicts in {}.", path),
-                1,
-            )
+            (format!("No unresolved git merge conflicts in {}.", path), 1)
         } else {
             let display_path = absolute_path
                 .file_name()
@@ -315,9 +312,9 @@ pub fn read_file_with_selector(
 /// Represents a merge conflict block in a file.
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct ConflictBlock {
-    start_line: usize,    // 1-based line number where <<<<<<< starts
-    separator_line: usize, // 1-based line number where ======= is
-    end_line: usize,      // 1-based line number where >>>>>>> is
+    start_line: usize,        // 1-based line number where <<<<<<< starts
+    separator_line: usize,    // 1-based line number where ======= is
+    end_line: usize,          // 1-based line number where >>>>>>> is
     base_line: Option<usize>, // 1-based line number where ||||||| is (for 3-way)
     ours_label: Option<String>,
     base_label: Option<String>,
@@ -339,7 +336,11 @@ fn extract_merge_conflicts(lines: &[&str]) -> Vec<ConflictBlock> {
 
         // Check for start of conflict block
         if let Some(label) = extract_marker_label(line, OURS_PREFIX) {
-            let ours_label = if label.is_empty() { None } else { Some(label.to_string()) };
+            let ours_label = if label.is_empty() {
+                None
+            } else {
+                Some(label.to_string())
+            };
             let start_line = i + 1; // Convert to 1-based
             let mut separator_line = None;
             let mut base_line = None;
@@ -356,7 +357,11 @@ fn extract_merge_conflicts(lines: &[&str]) -> Vec<ConflictBlock> {
                 if let Some(label) = extract_marker_label(current, BASE_PREFIX) {
                     if base_line.is_none() {
                         base_line = Some(j + 1);
-                        base_label = if label.is_empty() { None } else { Some(label.to_string()) };
+                        base_label = if label.is_empty() {
+                            None
+                        } else {
+                            Some(label.to_string())
+                        };
                         j += 1;
                         continue;
                     }
@@ -375,7 +380,11 @@ fn extract_merge_conflicts(lines: &[&str]) -> Vec<ConflictBlock> {
                 if let Some(label) = extract_marker_label(current, THEIRS_PREFIX) {
                     if separator_line.is_some() {
                         end_line = Some(j + 1);
-                        theirs_label = if label.is_empty() { None } else { Some(label.to_string()) };
+                        theirs_label = if label.is_empty() {
+                            None
+                        } else {
+                            Some(label.to_string())
+                        };
                         j += 1;
                         break;
                     }
@@ -431,7 +440,10 @@ fn format_conflict_summary(conflicts: &[ConflictBlock], display_path: &str) -> S
     let total = conflicts.len();
     let word = if total == 1 { "conflict" } else { "conflicts" };
 
-    output.push(format!("⚠ {} unresolved {} in {}", total, word, display_path));
+    output.push(format!(
+        "⚠ {} unresolved {} in {}",
+        total, word, display_path
+    ));
 
     // Extract labels for header
     let ours_label = conflicts.iter().find_map(|c| c.ours_label.as_ref());
@@ -446,7 +458,9 @@ fn format_conflict_summary(conflicts: &[ConflictBlock], display_path: &str) -> S
         output.push(format!("- theirs = {}", label));
     }
     if any_base {
-        let base_name = base_label.map(|l| l.to_string()).unwrap_or_else(|| "(no label)".to_string());
+        let base_name = base_label
+            .map(|l| l.to_string())
+            .unwrap_or_else(|| "(no label)".to_string());
         output.push(format!("- base = {}", base_name));
     }
 
@@ -467,8 +481,18 @@ fn format_conflict_summary(conflicts: &[ConflictBlock], display_path: &str) -> S
         } else {
             format!("L{}-{}", conflict.start_line, conflict.end_line)
         };
-        let kind = if conflict.base_line.is_some() { "  (3-way)" } else { "" };
-        output.push(format!("#{:>width$}  {}{}", id, range, kind, width = id_width));
+        let kind = if conflict.base_line.is_some() {
+            "  (3-way)"
+        } else {
+            ""
+        };
+        output.push(format!(
+            "#{:>width$}  {}{}",
+            id,
+            range,
+            kind,
+            width = id_width
+        ));
     }
 
     output.join("\n")
@@ -1610,15 +1634,17 @@ mod tests {
             Some("conflicts"),
         )
         .expect("read with conflicts selector should succeed");
-        assert!(output.file.content.contains("No unresolved git merge conflicts"));
+        assert!(output
+            .file
+            .content
+            .contains("No unresolved git merge conflicts"));
     }
 
     #[test]
     fn read_with_selector_conflicts_two_way() {
         let path = temp_path("conflicts-two-way.txt");
         let content = "<<<<<<< A\na-ours\n=======\na-theirs\n>>>>>>> A\nmiddle\n<<<<<<< B\nb-ours\n=======\nb-theirs\n>>>>>>> B\ntail";
-        write_file(path.to_string_lossy().as_ref(), content)
-            .expect("write should succeed");
+        write_file(path.to_string_lossy().as_ref(), content).expect("write should succeed");
 
         let output = super::read_file_with_selector(
             path.to_string_lossy().as_ref(),
@@ -1643,8 +1669,7 @@ mod tests {
     fn read_with_selector_conflicts_three_way() {
         let path = temp_path("conflicts-three-way.txt");
         let content = "head\n<<<<<<< HEAD\nours body\n||||||| common ancestor\nbase body\n=======\ntheirs body\n>>>>>>> feat\ntail";
-        write_file(path.to_string_lossy().as_ref(), content)
-            .expect("write should succeed");
+        write_file(path.to_string_lossy().as_ref(), content).expect("write should succeed");
 
         let output = super::read_file_with_selector(
             path.to_string_lossy().as_ref(),
