@@ -164,6 +164,20 @@ const SLASH_COMMAND_SPECS: &[SlashCommandSpec] = &[
         resume_supported: true,
     },
     SlashCommandSpec {
+        name: "tools",
+        aliases: &[],
+        summary: "List available tools and their descriptions",
+        argument_hint: None,
+        resume_supported: true,
+    },
+    SlashCommandSpec {
+        name: "info",
+        aliases: &[],
+        summary: "Show runtime information about claw-code",
+        argument_hint: None,
+        resume_supported: true,
+    },
+    SlashCommandSpec {
         name: "bughunter",
         aliases: &[],
         summary: "Inspect the codebase for likely bugs",
@@ -1091,6 +1105,8 @@ pub enum SlashCommand {
     Init,
     Diff,
     Version,
+    Tools,
+    Info,
     Export {
         path: Option<String>,
     },
@@ -1391,6 +1407,14 @@ pub fn validate_slash_command_input(
         "version" => {
             validate_no_args(command, &args)?;
             SlashCommand::Version
+        }
+        "tools" => {
+            validate_no_args(command, &args)?;
+            SlashCommand::Tools
+        }
+        "info" => {
+            validate_no_args(command, &args)?;
+            SlashCommand::Info
         }
         "export" => SlashCommand::Export { path: remainder },
         "session" => parse_session_command(&args)?,
@@ -5403,6 +5427,8 @@ pub fn handle_slash_command(
         | SlashCommand::History { .. }
         | SlashCommand::Team { .. }
         | SlashCommand::Setup
+        | SlashCommand::Tools
+        | SlashCommand::Info
         | SlashCommand::Unknown(_) => None,
     }
 }
@@ -6245,6 +6271,8 @@ mod tests {
         assert!(handle_slash_command("/mcp list", &session, CompactionConfig::default()).is_none());
         assert!(handle_slash_command("/diff", &session, CompactionConfig::default()).is_none());
         assert!(handle_slash_command("/version", &session, CompactionConfig::default()).is_none());
+        assert!(handle_slash_command("/tools", &session, CompactionConfig::default()).is_none());
+        assert!(handle_slash_command("/info", &session, CompactionConfig::default()).is_none());
         assert!(
             handle_slash_command("/export note.txt", &session, CompactionConfig::default())
                 .is_none()
