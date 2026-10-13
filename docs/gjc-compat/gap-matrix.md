@@ -1,8 +1,9 @@
 # GJC Compatibility Gap Matrix
 
-**Document Status**: Phase 1 Analysis (2026-10-13)  
+**Document Status**: Historical Planning Reference (updated 2026-10-13)  
 **Scope**: SDK wire protocol, session lifecycle, tools, skills, settings, hooks, commands, and AGENTS.md rules  
-**Target**: Rust fork-in-spirit of gajae-code (GJC) SDK-compatible and capability-compatible
+**Target**: Rust fork-in-spirit of gajae-code (GJC) SDK-compatible and capability-compatible  
+**Note**: This document captures the initial compatibility analysis and proposed roadmap. Implementation details are now tracked in focused slice-specific documents (e.g., `tool-semantics-phase1.md`). Status updates reflect work merged as of 2026-10-13 (PRs #3330, #3332, #3334, #3336, #3339).
 
 ---
 
@@ -12,17 +13,17 @@ This matrix maps GJC capabilities (from gajae-code) against claw-code's current 
 
 ### Key Findings
 
-| Area | Status | Priority |
-|------|--------|----------|
-| **SDK Wire Protocol** | Missing | P0 (Foundation) |
-| **Session Lifecycle** | Partial (no SDK) | P0 (Foundation) |
-| **Tool Catalog (55 tools)** | Partial (35/55) | P1 (Core) |
-| **Skill Discovery** | Partial (basic) | P1 (Core) |
-| **Settings & Config** | Partial | P2 (Enhancing) |
-| **Hooks & Plugins** | Existing | P3 (Polish) |
-| **AGENTS.md Rules** | Existing | P3 (Polish) |
-| **Slash Commands (120+)** | Partial (40/120+) | P2 (Core) |
-| **Subagent Delegation** | Existing | P2 (Core) |
+| Area | Status | Priority | Notes |
+|------|--------|----------|-------|
+| **SDK Wire Protocol** | ✅ Implemented | P0 (Foundation) | PR #3330: WebSocket transport, frame, error types |
+| **Session Lifecycle** | 🟡 In Progress | P0 (Foundation) | SDK transport merged; session reconciliation in progress |
+| **Tool Catalog (55 tools)** | 🟡 Partial (35/55+) | P1 (Core) | Read selectors (PR #3332/#3334); /tools, /info (PR #3339) |
+| **Skill Discovery** | 🟡 Partial (basic) | P1 (Core) | No changes in recent slices |
+| **Settings & Config** | 🟡 Partial | P2 (Enhancing) | Not yet addressed in landed PRs |
+| **Hooks & Plugins** | ✅ Existing | P3 (Polish) | No changes needed |
+| **AGENTS.md Rules** | ✅ Existing | P3 (Polish) | No changes needed |
+| **Slash Commands (120+)** | 🟡 Partial (42/120+) | P2 (Core) | /tools, /info added (PR #3339) |
+| **Subagent Delegation** | ✅ Existing | P2 (Core) | No changes needed |
 
 ---
 
@@ -60,7 +61,12 @@ GJC uses a **WebSocket-based JSON-RPC-like protocol** with:
 
 ### claw-code Status
 
-**Current**: Missing entirely. claw-code has no SDK wire protocol or external session API.
+**Current** (as of PR #3330): Implemented. WebSocket-based JSON-RPC transport in `rust/crates/sdk/` with:
+- `transport.rs`: WebSocket client/server, frame send/recv
+- `frame.rs`: Frame struct, JSON serialization
+- `error.rs`: SDK error types with `uncertain_after_send` recovery semantics
+
+Remaining: Operation type definitions (Q1-Q32, C01-C06), reverse operation handlers, session reconciliation.
 
 **Files**: None  
 **Lines**: 0
@@ -155,7 +161,7 @@ GJC sessions have **three entry points**:
 
 ### claw-code Status
 
-**Current**: Partial. Local session lifecycle exists but no SDK transport or remote access.
+**Current** (as of PR #3330): Partial. SDK transport merged (see SDK Wire Protocol). Local session lifecycle exists in `runtime::Session`. Remaining: operation handlers, session router with durable lookup, invocation reconciliation store, terminal scope tracking.
 
 **Files**:
 - `rust/crates/runtime/src/session.rs` (1,961 LOC)
@@ -237,7 +243,10 @@ GJC implements **55 distinct tools** across multiple domains:
 
 ### claw-code Status
 
-**Current**: Partial. 35 tools implemented, 20 missing or incomplete.
+**Current** (as of PR #3332/#3334/#3339): Partial. 35+ tools implemented.
+- PR #3332/#3334: Read tool enhanced with GJC-compatible line range selectors (`:50`, `:50-200`, `:50+150`, `:raw`, `:conflicts`, etc.)
+- PR #3339: `/tools` and `/info` commands implemented
+- Still missing: image_gen (DALL-E), ask (interactive), workflow_gate_*, command_repl, shell_repl, powershell, cost_calculator
 
 **Files**: `rust/crates/tools/src/lib.rs` (10,892 LOC, single file with all 55 spec + implementations)
 
@@ -570,7 +579,9 @@ GJC implements **120+ slash commands** for REPL interaction:
 
 ### claw-code Status
 
-**Current**: Partial. ~40 commands implemented out of 120+.
+**Current** (as of PR #3339): Partial. ~42 commands implemented out of 120+.
+- PR #3339: Added `/tools` and `/info` commands
+- Remaining: /model set/list, /theme, /cost, /dump, /trace, /tasks list/cancel, workflow commands (/plan, /review, /ultragoal), and others
 
 **Files**:
 - `rust/crates/commands/src/lib.rs` (7,183 LOC)
@@ -681,9 +692,16 @@ GJC's **subagent system** enables parallel task execution:
 
 ## 11. IMPLEMENTATION ROADMAP
 
+**Status Summary** (as of 2026-10-13):
+- Phase 1.1 (SDK transport): ✅ Merged via PR #3330
+- Phase 1.2 (Operation registry): 🟡 In progress
+- Phase 1.3 (Session integration): 🟡 In progress
+- Phase 2.1 (Tool enhancement): 🟡 Partial (read selectors via PR #3332/#3334)
+- Phase 3.2 (Slash commands): 🟡 Partial (/tools, /info via PR #3339)
+
 ### Phase 1: Foundation (SDK Wire Protocol)
 
-**Slice 1.1: WebSocket Transport & Frame Correlation**
+**Slice 1.1: WebSocket Transport & Frame Correlation** ✅ (PR #3330)
 - Create `sdk` crate structure
 - Implement `SdkClient` with WebSocket connection
 - Add frame ID correlation and response matching
