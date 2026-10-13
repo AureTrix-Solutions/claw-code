@@ -15,13 +15,15 @@ pub enum ProviderClient {
 
 /// Provider selected explicitly by persisted/runtime configuration.
 ///
-/// This is intentionally separate from `ProviderKind`: DashScope speaks the
-/// OpenAI-compatible wire protocol but remains a distinct configured provider.
+/// This is intentionally separate from `ProviderKind`: Custom OpenAI and
+/// DashScope speak the OpenAI-compatible wire protocol but remain distinct
+/// configured providers.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ProviderConfigKind {
     Anthropic,
     Xai,
     OpenAi,
+    CustomOpenAi,
     DashScope,
 }
 
@@ -96,9 +98,12 @@ impl ProviderClient {
 
                 Ok(Self::Xai(client))
             }
-            ProviderConfigKind::OpenAi | ProviderConfigKind::DashScope => {
+            ProviderConfigKind::OpenAi
+            | ProviderConfigKind::CustomOpenAi
+            | ProviderConfigKind::DashScope => {
                 let compat = match config.kind {
                     ProviderConfigKind::OpenAi => OpenAiCompatConfig::openai(),
+                    ProviderConfigKind::CustomOpenAi => OpenAiCompatConfig::custom_openai(),
                     ProviderConfigKind::DashScope => OpenAiCompatConfig::dashscope(),
                     _ => unreachable!("non-OpenAI provider reached compatibility path"),
                 };
@@ -401,6 +406,56 @@ mod tests {
             }
             other => panic!("Expected explicit OpenAI provider, got: {other:?}"),
         }
+    }
+
+    #[test]
+    fn persisted_custom_openai_uses_its_own_environment_namespace() {
+        let _lock = env_lock();
+        let _custom_key = EnvVarGuard::set("CLAWCUSTOMOPENAI_API_KEY", Some("custom-key"));
+        let _custom_url = EnvVarGuard::set(
+            "CLAWCUSTOMOPENAI_BASE_URL",
+            Some("https://custom.example/v1"),
+        );
+        let _openai_key = EnvVarGuard::set("OPENAI_API_KEY", Some("openai-key"));
+        let _openai_url = EnvVarGuard::set("OPENAI_BASE_URL", Some("https://openai.example/v1"));
+        let _ollama = EnvVarGuard::set("OLLAMA_HOST", Some("http://localhost:11434"));
+
+        let config = ProviderConfig {
+            kind: ProviderConfigKind::CustomOpenAi,
+            model: "qwen-plus".to_string(),
+            api_key: None,
+            base_url: None,
+        };
+
+        match ProviderClient::from_config(&config).expect("custom OpenAI config should succeed") {
+            ProviderClient::OpenAi(client) => {
+                assert_eq!(client.base_url(), "https://custom.example/v1");
+            }
+            other => panic!("Expected custom OpenAI provider, got: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn persisted_custom_openai_does_not_reuse_openai_credentials() {
+        let _lock = env_lock();
+        let _custom_key = EnvVarGuard::set("CLAWCUSTOMOPENAI_API_KEY", None);
+        let _custom_url = EnvVarGuard::set(
+            "CLAWCUSTOMOPENAI_BASE_URL",
+            Some("https://custom.example/v1"),
+        );
+        let _openai_key = EnvVarGuard::set("OPENAI_API_KEY", Some("openai-key"));
+        let _ollama = EnvVarGuard::set("OLLAMA_HOST", Some("http://localhost:11434"));
+
+        let config = ProviderConfig {
+            kind: ProviderConfigKind::CustomOpenAi,
+            model: "gpt-5".to_string(),
+            api_key: None,
+            base_url: None,
+        };
+
+        let error = ProviderClient::from_config(&config)
+            .expect_err("custom OpenAI must require its own credentials");
+        assert!(error.to_string().contains("CLAWCUSTOMOPENAI_API_KEY"));
     }
 
     #[test]
