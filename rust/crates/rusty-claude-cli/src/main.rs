@@ -19970,6 +19970,9 @@ UU conflicted.rs",
 
     #[test]
     fn explicit_model_provider_hint_controls_runtime_provider_dispatch() {
+        let old_openai_base_url = std::env::var("OPENAI_BASE_URL").ok();
+        std::env::remove_var("OPENAI_BASE_URL");
+        
         let config = api::ProviderConfig {
             kind: api::ProviderConfigKind::DashScope,
             model: "qwen-plus".to_string(),
@@ -19982,7 +19985,6 @@ UU conflicted.rs",
             "openai/gpt-5".to_string(),
             false,
             false,
-            TerminalTail::new(),
             None,
             GlobalToolRegistry::builtin(),
             None,
@@ -19990,7 +19992,7 @@ UU conflicted.rs",
         )
         .expect("runtime client should construct from explicit model provider hint");
 
-        match runtime.client {
+        match &runtime.client {
             api::ProviderClient::OpenAi(client) => {
                 assert!(client.base_url().contains("api.openai.com"));
                 assert!(!client.base_url().contains("dashscope.aliyuncs.com"));
@@ -19998,6 +20000,10 @@ UU conflicted.rs",
             other => panic!(
                 "explicit OpenAI model prefix must override persisted DashScope configuration, got {other:?}"
             ),
+        }
+        
+        if let Some(value) = old_openai_base_url {
+            std::env::set_var("OPENAI_BASE_URL", value);
         }
     }
 
@@ -20042,7 +20048,6 @@ UU conflicted.rs",
             "qwen-plus".to_string(),
             false,
             false,
-            TerminalTail::new(),
             None,
             GlobalToolRegistry::builtin(),
             None,
