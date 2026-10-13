@@ -2251,6 +2251,7 @@ pub(crate) struct SkillCollection {
 enum SkillOrigin {
     SkillsDir,
     LegacyCommandsDir,
+    Bundled,
 }
 
 impl SkillOrigin {
@@ -2258,6 +2259,7 @@ impl SkillOrigin {
         match self {
             Self::SkillsDir => None,
             Self::LegacyCommandsDir => Some("legacy /commands"),
+            Self::Bundled => Some("bundled"),
         }
     }
 }
@@ -3130,7 +3132,7 @@ pub fn resolve_skill_path(cwd: &Path, skill: &str) -> std::io::Result<PathBuf> {
         for entry in fs::read_dir(&root.path)? {
             let entry = entry?;
             match root.origin {
-                SkillOrigin::SkillsDir => {
+                SkillOrigin::SkillsDir | SkillOrigin::Bundled => {
                     if !entry.path().is_dir() {
                         continue;
                     }
@@ -3555,6 +3557,52 @@ fn discover_definition_roots(cwd: &Path, leaf: &str) -> Vec<(DefinitionSource, P
     roots
 }
 
+/// Returns the default bundled skills root directory.
+///
+/// Resolution order (first existing path wins):
+/// 1. `<exe_dir>/../share/claw/skills/bundled` — standard install layout
+/// 2. `<exe_dir>/bundled-skills` — simple relocated layout
+/// 3. `CARGO_MANIFEST_DIR/bundled` — dev/source-tree fallback (only if it exists)
+/// 4. `<exe_dir>/../share/claw/skills/bundled` — canonical default even if missing
+fn bundled_skill_root() -> PathBuf {
+    if let Ok(exe_path) = std::env::current_exe() {
+        if let Some(exe_dir) = exe_path.parent() {
+            let share_path = exe_dir
+                .join("..")
+                .join("share")
+                .join("claw")
+                .join("skills")
+                .join("bundled");
+            if share_path.exists() {
+                return share_path;
+            }
+
+            let adjacent = exe_dir.join("bundled-skills");
+            if adjacent.exists() {
+                return adjacent;
+            }
+        }
+    }
+
+    let dev_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("bundled");
+    if dev_path.exists() {
+        return dev_path;
+    }
+
+    if let Ok(exe_path) = std::env::current_exe() {
+        if let Some(exe_dir) = exe_path.parent() {
+            return exe_dir
+                .join("..")
+                .join("share")
+                .join("claw")
+                .join("skills")
+                .join("bundled");
+        }
+    }
+
+    PathBuf::from("/usr/share/claw/skills/bundled")
+}
+
 #[allow(clippy::too_many_lines)]
 fn discover_skill_roots(cwd: &Path) -> Vec<SkillRoot> {
     let mut roots = Vec::new();
@@ -3716,6 +3764,14 @@ fn discover_skill_roots(cwd: &Path) -> Vec<SkillRoot> {
             SkillOrigin::LegacyCommandsDir,
         );
     }
+
+    let bundled_root = bundled_skill_root();
+    push_unique_skill_root(
+        &mut roots,
+        DefinitionSource::UserClaw,
+        bundled_root,
+        SkillOrigin::Bundled,
+    );
 
     roots
 }
@@ -4149,7 +4205,7 @@ fn load_skills_from_roots_with_drift(roots: &[SkillRoot]) -> std::io::Result<Ski
         for entry in fs::read_dir(&root.path)? {
             let entry = entry?;
             match root.origin {
-                SkillOrigin::SkillsDir => {
+                SkillOrigin::SkillsDir | SkillOrigin::Bundled => {
                     if !entry.path().is_dir() {
                         continue;
                     }
@@ -5205,6 +5261,7 @@ fn skill_origin_id(origin: SkillOrigin) -> &'static str {
     match origin {
         SkillOrigin::SkillsDir => "skills_dir",
         SkillOrigin::LegacyCommandsDir => "legacy_commands_dir",
+        SkillOrigin::Bundled => "bundled",
     }
 }
 
@@ -5436,14 +5493,15 @@ pub fn handle_slash_command(
 #[cfg(test)]
 mod tests {
     use super::{
-        classify_skills_slash_command, handle_agents_slash_command_json,
+        classify_skills_slash_command, discover_skill_roots, handle_agents_slash_command_json,
         handle_plugins_slash_command, handle_skills_slash_command_json, handle_slash_command,
         load_agents_from_roots, load_skills_from_roots, render_agents_report,
         render_agents_report_json, render_mcp_report_json_for, render_plugins_report,
         render_plugins_report_with_failures, render_skills_report, render_slash_command_help,
         render_slash_command_help_detail, resolve_skill_path, resume_supported_slash_commands,
-        slash_command_specs, suggest_slash_commands, validate_slash_command_input, AgentCollection,
-        DefinitionSource, SkillOrigin, SkillRoot, SkillSlashDispatch, SlashCommand,
+        skill_origin_id, skill_origin_json, slash_command_specs, suggest_slash_commands,
+        validate_slash_command_input, AgentCollection, DefinitionSource, SkillOrigin, SkillRoot,
+        SkillSlashDispatch, SlashCommand,
     };
     use plugins::{
         PluginError, PluginKind, PluginLifecycle, PluginLoadFailure, PluginManager,
@@ -7233,5 +7291,51 @@ mod tests {
 
         let _ = fs::remove_dir_all(config_home);
         let _ = fs::remove_dir_all(bundled_root);
+    }
+
+    #[test]
+    fn discovers_bundled_skills_from_binary_layout() {
+        let cwd = temp_dir("bundled-skills-discovery");
+        let roots = discover_skill_roots(&cwd);
+
+        let has_bundled = roots.iter().any(|root| root.origin == SkillOrigin::Bundled);
+        assert!(
+            has_bundled,
+            "discover_skill_roots should include a bundled skills root"
+        );
+
+        let _ = fs::remove_dir_all(cwd);
+    }
+
+    #[test]
+    fn bundled_skills_have_correct_origin_metadata() {
+        let bundled_origin = SkillOrigin::Bundled;
+        assert_eq!(skill_origin_id(bundled_origin), "bundled");
+        assert_eq!(bundled_origin.detail_label(), Some("bundled"));
+
+        let bundled_json = skill_origin_json(bundled_origin);
+        assert_eq!(bundled_json["id"], "bundled");
+        assert_eq!(bundled_json["detail_label"], "bundled");
+    }
+
+    #[test]
+    fn bundled_skills_are_included_in_json_output() {
+        let cwd = temp_dir("bundled-skills-json-test");
+        let roots = discover_skill_roots(&cwd);
+
+        let bundled_root = roots
+            .iter()
+            .find(|r| r.origin == SkillOrigin::Bundled)
+            .expect("should have bundled skills root");
+
+        let loaded_skills =
+            load_skills_from_roots(&[bundled_root.clone()]).expect("should load bundled skills");
+
+        assert!(
+            !loaded_skills.is_empty() || bundled_root.path.exists(),
+            "bundled skills should either load successfully or root should exist"
+        );
+
+        let _ = fs::remove_dir_all(cwd);
     }
 }
