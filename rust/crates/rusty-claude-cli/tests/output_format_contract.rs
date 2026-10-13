@@ -470,10 +470,19 @@ fn direct_resume_safe_slash_commands_route_to_local_json_actions_831() {
             .unwrap_or_else(|_| panic!("{command} must emit JSON (#831), got: {stdout:?}"));
 
         assert_eq!(parsed["kind"], expected_kind, "{command} kind: {parsed}");
-        assert_eq!(
-            parsed["status"], expected_status,
-            "{command} status: {parsed}"
-        );
+        // /sandbox status varies by environment: "ok" when namespace isolation is available,
+        // "warn" when running in restricted environments (e.g., CI without unshare support)
+        if command == "/sandbox" {
+            assert!(
+                parsed["status"] == "ok" || parsed["status"] == "warn",
+                "{command} status should be 'ok' or 'warn' but got: {parsed}"
+            );
+        } else {
+            assert_eq!(
+                parsed["status"], expected_status,
+                "{command} status: {parsed}"
+            );
+        }
         assert_ne!(
             parsed["error_kind"], "interactive_only",
             "{command} must not emit interactive_only (#831): {parsed}"
