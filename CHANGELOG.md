@@ -13,7 +13,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GJC-compatible `:conflicts` selector for git merge conflict detection
 - SDK wire transport with WebSocket support
 - Nix flake development environment
-- `/status`, `/cost`, and `/version` slash commands
 - Persistent provider configuration loading
 - Pagination support for large read_file results
 - Comprehensive GJC compatibility documentation and analysis
