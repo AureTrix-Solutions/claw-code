@@ -15,7 +15,6 @@ status-help.txt
 .port_sessions/
 # Local agent session state
 .gjc/
-.claude/
 # Nix build outputs and direnv
 .envrc.local
 result
