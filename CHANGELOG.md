@@ -5,6 +5,44 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.4] - 2026-10-13
+
+### Added
+
+- GJC-compatible line range selectors for read_file tool (`:50-200`, `:50+150` syntax)
+- GJC-compatible `:conflicts` selector for git merge conflict detection
+- SDK wire transport with WebSocket support
+- Nix flake development environment
+- `/status`, `/cost`, and `/version` slash commands
+- Persistent provider configuration loading
+- Pagination support for large read_file results
+- Comprehensive GJC compatibility documentation and analysis
+
+### Fixed
+
+- Windows path containment checks for security boundary enforcement
+- Git bash detection on Windows with proper probe caching
+- Unresolvable path denial to prevent escape attempts
+- Auto-compaction context window measurement
+- Tool result preservation on failed turns
+- Model stall recovery without tool calls
+- Streaming markdown formatting with preserved block separators
+- Local model validation bypass generalization beyond Ollama
+- Release artifact checksums on macOS and Linux
+- Duplicate assistant text rendering
+- Workspace slash command wire-up
+
+### Changed
+
+- Enhanced path scope validation for multiple Windows path spellings
+- Improved error handling and configuration defaults
+- Upgraded GitHub Actions to immutable commit SHAs for CI security
+
+### Known Limitations
+
+- ACP / Zed integration is not yet implemented (status stub available via `claw acp`)
+- Python porting workspace is for reference only, not used in production
+
 ## [0.1.3] - 2026-10-13
 
 This is the first public binary release of Claw Code.
