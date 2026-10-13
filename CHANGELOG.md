@@ -5,6 +5,46 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.5] - 2026-10-13
+
+### Added
+
+- CLI turn interruption: press Esc to interrupt running turns and cancel in-flight model requests
+- Custom OpenAI provider namespace with separate environment variables for multi-tenant scenarios
+- `/tools` and `/info` slash commands for command discovery and runtime information
+- Team enhancements: subagentModel accessor chain and parallel tool execution support
+- Configuration options for concurrent tool calls and parallel subagent execution (`maxParallelToolCalls`, `maxConcurrentAgents`)
+- Per-team subagent concurrency control via AgentGate
+- SDK operation registry with schema validation for extensible operation handling
+- Bundled skills registry and skill chaining support for skill composition
+- Per-session settings override with schema validation
+- WebSocket client transport completion for SDK wire protocol support
+
+### Fixed
+
+- Turn interruption signal handling for graceful cancellation of in-flight requests
+- Markdown streaming block spacing in CLI output
+- Spinner restoration for proper is_terminal() check in run_turn
+- Model token limit catch-all to return None for unknown models instead of panicking
+- Parallel tool result ordering by call index with fan-out capping
+- Workspace unsafe_code=forbid restoration across all crates
+- TaskClaim TOCTOU (time-of-check-time-of-use) vulnerability
+- TUI dependency removal and claw-rag-service compilation on non-Linux platforms
+- Clippy lint violations in trident, compact, and claw-rag-service crates
+- PermissionMode comparison to use explicit .covers() method instead of direct operators
+- OPENAI_BASE_URL environment isolation in provider hint tests
+
+### Changed
+
+- Enhanced permission mode checking for consistency and clarity
+- Improved team and concurrent agent configuration schema
+- Refactored slash command processing for /tools and /info implementations
+
+### Known Limitations
+
+- ACP / Zed integration is not yet implemented (status stub available via `claw acp`)
+- Python porting workspace is for reference only, not used in production
+
 ## [0.1.4] - 2026-10-13
 
 ### Added
