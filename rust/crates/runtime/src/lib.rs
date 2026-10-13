@@ -181,8 +181,8 @@ pub use session::{
     SessionFork, SessionHeartbeat, SessionLiveness, SessionPromptEntry,
 };
 pub use session_settings::{
-    ConfigHotreloadMonitor, SettingApplicator, SettingCategory, SettingSchema, SettingSchemaRegistry,
-    SettingType, SessionSettings,
+    ConfigHotreloadMonitor, SessionSettings, SettingApplicator, SettingCategory, SettingSchema,
+    SettingSchemaRegistry, SettingType,
 };
 pub use sse::{IncrementalSseParser, SseEvent};
 pub use stale_base::{

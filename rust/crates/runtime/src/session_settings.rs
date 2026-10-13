@@ -169,11 +169,7 @@ impl SessionSettings {
 
     /// Get effective value for a setting, applying the override hierarchy:
     /// request > session > global > default
-    pub fn get_effective(
-        &self,
-        name: &str,
-        schema: &SettingSchema,
-    ) -> Option<JsonValue> {
+    pub fn get_effective(&self, name: &str, schema: &SettingSchema) -> Option<JsonValue> {
         if let Some(value) = self.request_overrides.get(name) {
             return Some(value.clone());
         }
@@ -363,9 +359,7 @@ impl ConfigHotreloadMonitor {
     /// Create a new hotreload monitor for a config file.
     pub fn new(path: impl AsRef<Path>) -> Self {
         let path = path.as_ref().to_path_buf();
-        let last_modified = fs::metadata(&path)
-            .ok()
-            .and_then(|m| m.modified().ok());
+        let last_modified = fs::metadata(&path).ok().and_then(|m| m.modified().ok());
 
         Self {
             watched_file: path,
@@ -537,14 +531,12 @@ mod tests {
     #[test]
     fn registry_validation() {
         let mut registry = SettingSchemaRegistry::new();
-        registry.register(
-            SettingSchema::new(
-                "model",
-                "The model to use",
-                SettingType::String,
-                SettingCategory::Model,
-            ),
-        );
+        registry.register(SettingSchema::new(
+            "model",
+            "The model to use",
+            SettingType::String,
+            SettingCategory::Model,
+        ));
 
         let mut settings = BTreeMap::new();
         settings.insert(
@@ -558,14 +550,12 @@ mod tests {
     #[test]
     fn registry_validation_invalid_type() {
         let mut registry = SettingSchemaRegistry::new();
-        registry.register(
-            SettingSchema::new(
-                "model",
-                "The model to use",
-                SettingType::String,
-                SettingCategory::Model,
-            ),
-        );
+        registry.register(SettingSchema::new(
+            "model",
+            "The model to use",
+            SettingType::String,
+            SettingCategory::Model,
+        ));
 
         let mut settings = BTreeMap::new();
         settings.insert("model".to_string(), JsonValue::Number(42));
@@ -589,14 +579,12 @@ mod tests {
     #[test]
     fn setting_applicator_apply_global() {
         let mut registry = SettingSchemaRegistry::new();
-        registry.register(
-            SettingSchema::new(
-                "model",
-                "The model to use",
-                SettingType::String,
-                SettingCategory::Model,
-            ),
-        );
+        registry.register(SettingSchema::new(
+            "model",
+            "The model to use",
+            SettingType::String,
+            SettingCategory::Model,
+        ));
 
         let applicator = SettingApplicator::new(registry);
 
@@ -618,14 +606,12 @@ mod tests {
     #[test]
     fn setting_applicator_override_hierarchy() {
         let mut registry = SettingSchemaRegistry::new();
-        registry.register(
-            SettingSchema::new(
-                "model",
-                "The model to use",
-                SettingType::String,
-                SettingCategory::Model,
-            ),
-        );
+        registry.register(SettingSchema::new(
+            "model",
+            "The model to use",
+            SettingType::String,
+            SettingCategory::Model,
+        ));
 
         let applicator = SettingApplicator::new(registry);
 
@@ -641,7 +627,9 @@ mod tests {
             "model".to_string(),
             JsonValue::String("claude-3-opus".to_string()),
         );
-        applicator.apply_session_overrides(session_overrides).unwrap();
+        applicator
+            .apply_session_overrides(session_overrides)
+            .unwrap();
 
         let effective = applicator.get_effective("model");
         assert_eq!(
@@ -653,14 +641,12 @@ mod tests {
     #[test]
     fn setting_applicator_clear_request_overrides() {
         let mut registry = SettingSchemaRegistry::new();
-        registry.register(
-            SettingSchema::new(
-                "model",
-                "The model to use",
-                SettingType::String,
-                SettingCategory::Model,
-            ),
-        );
+        registry.register(SettingSchema::new(
+            "model",
+            "The model to use",
+            SettingType::String,
+            SettingCategory::Model,
+        ));
 
         let applicator = SettingApplicator::new(registry);
 
@@ -676,7 +662,9 @@ mod tests {
             "model".to_string(),
             JsonValue::String("claude-3-opus".to_string()),
         );
-        applicator.apply_request_overrides(request_overrides).unwrap();
+        applicator
+            .apply_request_overrides(request_overrides)
+            .unwrap();
 
         applicator.clear_request_overrides();
 
@@ -690,22 +678,18 @@ mod tests {
     #[test]
     fn registry_by_category() {
         let mut registry = SettingSchemaRegistry::new();
-        registry.register(
-            SettingSchema::new(
-                "model",
-                "The model to use",
-                SettingType::String,
-                SettingCategory::Model,
-            ),
-        );
-        registry.register(
-            SettingSchema::new(
-                "temperature",
-                "Sampling temperature",
-                SettingType::Number,
-                SettingCategory::Advanced,
-            ),
-        );
+        registry.register(SettingSchema::new(
+            "model",
+            "The model to use",
+            SettingType::String,
+            SettingCategory::Model,
+        ));
+        registry.register(SettingSchema::new(
+            "temperature",
+            "Sampling temperature",
+            SettingType::Number,
+            SettingCategory::Advanced,
+        ));
 
         let model_settings = registry.by_category(SettingCategory::Model);
         assert_eq!(model_settings.len(), 1);
@@ -757,7 +741,9 @@ mod tests {
             "permission_mode".to_string(),
             JsonValue::String("workspace_write".to_string()),
         );
-        assert!(applicator.apply_session_overrides(session_overrides).is_ok());
+        assert!(applicator
+            .apply_session_overrides(session_overrides)
+            .is_ok());
 
         let effective = applicator.get_effective("permission_mode");
         assert_eq!(
@@ -769,22 +755,18 @@ mod tests {
     #[test]
     fn temperature_token_overrides_work() {
         let mut registry = SettingSchemaRegistry::new();
-        registry.register(
-            SettingSchema::new(
-                "temperature",
-                "Sampling temperature",
-                SettingType::Number,
-                SettingCategory::Advanced,
-            ),
-        );
-        registry.register(
-            SettingSchema::new(
-                "max_tokens",
-                "Maximum tokens to generate",
-                SettingType::Number,
-                SettingCategory::Advanced,
-            ),
-        );
+        registry.register(SettingSchema::new(
+            "temperature",
+            "Sampling temperature",
+            SettingType::Number,
+            SettingCategory::Advanced,
+        ));
+        registry.register(SettingSchema::new(
+            "max_tokens",
+            "Maximum tokens to generate",
+            SettingType::Number,
+            SettingCategory::Advanced,
+        ));
 
         let applicator = SettingApplicator::new(registry);
 
@@ -795,9 +777,14 @@ mod tests {
 
         let mut session_overrides = BTreeMap::new();
         session_overrides.insert("temperature".to_string(), JsonValue::Number(5));
-        assert!(applicator.apply_session_overrides(session_overrides).is_ok());
+        assert!(applicator
+            .apply_session_overrides(session_overrides)
+            .is_ok());
 
-        assert_eq!(applicator.get_effective("temperature"), Some(JsonValue::Number(5)));
+        assert_eq!(
+            applicator.get_effective("temperature"),
+            Some(JsonValue::Number(5))
+        );
         assert_eq!(
             applicator.get_effective("max_tokens"),
             Some(JsonValue::Number(4096))
@@ -807,22 +794,18 @@ mod tests {
     #[test]
     fn setting_propagation_to_all_tools() {
         let mut registry = SettingSchemaRegistry::new();
-        registry.register(
-            SettingSchema::new(
-                "model",
-                "The model to use",
-                SettingType::String,
-                SettingCategory::Model,
-            ),
-        );
-        registry.register(
-            SettingSchema::new(
-                "context_window",
-                "Context window size",
-                SettingType::Number,
-                SettingCategory::Advanced,
-            ),
-        );
+        registry.register(SettingSchema::new(
+            "model",
+            "The model to use",
+            SettingType::String,
+            SettingCategory::Model,
+        ));
+        registry.register(SettingSchema::new(
+            "context_window",
+            "Context window size",
+            SettingType::Number,
+            SettingCategory::Advanced,
+        ));
 
         let applicator = SettingApplicator::new(registry);
 
@@ -889,14 +872,12 @@ mod tests {
     #[test]
     fn applicator_validation_error_on_invalid_override() {
         let mut registry = SettingSchemaRegistry::new();
-        registry.register(
-            SettingSchema::new(
-                "model",
-                "The model to use",
-                SettingType::String,
-                SettingCategory::Model,
-            ),
-        );
+        registry.register(SettingSchema::new(
+            "model",
+            "The model to use",
+            SettingType::String,
+            SettingCategory::Model,
+        ));
 
         let applicator = SettingApplicator::new(registry);
 
@@ -913,14 +894,12 @@ mod tests {
         assert!(registry.is_empty());
         assert_eq!(registry.len(), 0);
 
-        registry.register(
-            SettingSchema::new(
-                "model",
-                "The model to use",
-                SettingType::String,
-                SettingCategory::Model,
-            ),
-        );
+        registry.register(SettingSchema::new(
+            "model",
+            "The model to use",
+            SettingType::String,
+            SettingCategory::Model,
+        ));
 
         assert!(!registry.is_empty());
         assert_eq!(registry.len(), 1);
@@ -929,14 +908,12 @@ mod tests {
     #[test]
     fn dynamic_setting_application_mid_session() {
         let mut registry = SettingSchemaRegistry::new();
-        registry.register(
-            SettingSchema::new(
-                "model",
-                "The model to use",
-                SettingType::String,
-                SettingCategory::Model,
-            ),
-        );
+        registry.register(SettingSchema::new(
+            "model",
+            "The model to use",
+            SettingType::String,
+            SettingCategory::Model,
+        ));
 
         let applicator = SettingApplicator::new(registry);
 
@@ -1010,14 +987,12 @@ mod tests {
             )
             .with_default(JsonValue::String("claude-3-haiku".to_string())),
         );
-        registry.register(
-            SettingSchema::new(
-                "temperature",
-                "Sampling temperature",
-                SettingType::Number,
-                SettingCategory::Advanced,
-            ),
-        );
+        registry.register(SettingSchema::new(
+            "temperature",
+            "Sampling temperature",
+            SettingType::Number,
+            SettingCategory::Advanced,
+        ));
 
         let applicator = SettingApplicator::new(registry);
 
@@ -1034,11 +1009,15 @@ mod tests {
             "model".to_string(),
             JsonValue::String("claude-3-opus".to_string()),
         );
-        applicator.apply_session_overrides(session_overrides).unwrap();
+        applicator
+            .apply_session_overrides(session_overrides)
+            .unwrap();
 
         let mut request_overrides = BTreeMap::new();
         request_overrides.insert("temperature".to_string(), JsonValue::Number(6));
-        applicator.apply_request_overrides(request_overrides).unwrap();
+        applicator
+            .apply_request_overrides(request_overrides)
+            .unwrap();
 
         // model should use session override
         assert_eq!(
@@ -1069,7 +1048,9 @@ mod tests {
             JsonValue::String("claude-3-opus".to_string()),
         ]);
 
-        assert!(schema.validate(&JsonValue::String("claude-3-opus".to_string())).is_ok());
+        assert!(schema
+            .validate(&JsonValue::String("claude-3-opus".to_string()))
+            .is_ok());
         assert!(schema
             .validate(&JsonValue::String("invalid-model".to_string()))
             .is_err());
@@ -1078,14 +1059,12 @@ mod tests {
     #[test]
     fn get_settings_clone() {
         let mut registry = SettingSchemaRegistry::new();
-        registry.register(
-            SettingSchema::new(
-                "model",
-                "The model to use",
-                SettingType::String,
-                SettingCategory::Model,
-            ),
-        );
+        registry.register(SettingSchema::new(
+            "model",
+            "The model to use",
+            SettingType::String,
+            SettingCategory::Model,
+        ));
 
         let applicator = SettingApplicator::new(registry);
 
@@ -1101,7 +1080,9 @@ mod tests {
             "model".to_string(),
             JsonValue::String("claude-3-sonnet".to_string()),
         );
-        applicator.apply_session_overrides(session_overrides).unwrap();
+        applicator
+            .apply_session_overrides(session_overrides)
+            .unwrap();
 
         let settings = applicator.get_settings();
         assert_eq!(settings.global.len(), 1);
@@ -1113,52 +1094,42 @@ mod tests {
         let mut registry = SettingSchemaRegistry::new();
 
         // Model settings
-        registry.register(
-            SettingSchema::new(
-                "model",
-                "The model to use",
-                SettingType::String,
-                SettingCategory::Model,
-            ),
-        );
+        registry.register(SettingSchema::new(
+            "model",
+            "The model to use",
+            SettingType::String,
+            SettingCategory::Model,
+        ));
 
         // Behavior settings
-        registry.register(
-            SettingSchema::new(
-                "permission_mode",
-                "Permission mode",
-                SettingType::String,
-                SettingCategory::Behavior,
-            ),
-        );
-        registry.register(
-            SettingSchema::new(
-                "auto_save",
-                "Enable auto-save",
-                SettingType::Boolean,
-                SettingCategory::Behavior,
-            ),
-        );
+        registry.register(SettingSchema::new(
+            "permission_mode",
+            "Permission mode",
+            SettingType::String,
+            SettingCategory::Behavior,
+        ));
+        registry.register(SettingSchema::new(
+            "auto_save",
+            "Enable auto-save",
+            SettingType::Boolean,
+            SettingCategory::Behavior,
+        ));
 
         // UX settings
-        registry.register(
-            SettingSchema::new(
-                "verbose_output",
-                "Enable verbose output",
-                SettingType::Boolean,
-                SettingCategory::Ux,
-            ),
-        );
+        registry.register(SettingSchema::new(
+            "verbose_output",
+            "Enable verbose output",
+            SettingType::Boolean,
+            SettingCategory::Ux,
+        ));
 
         // Advanced settings
-        registry.register(
-            SettingSchema::new(
-                "temperature",
-                "Sampling temperature",
-                SettingType::Number,
-                SettingCategory::Advanced,
-            ),
-        );
+        registry.register(SettingSchema::new(
+            "temperature",
+            "Sampling temperature",
+            SettingType::Number,
+            SettingCategory::Advanced,
+        ));
 
         assert_eq!(registry.by_category(SettingCategory::Model).len(), 1);
         assert_eq!(registry.by_category(SettingCategory::Behavior).len(), 2);
@@ -1251,14 +1222,12 @@ mod tests {
     #[test]
     fn object_type_setting() {
         let mut registry = SettingSchemaRegistry::new();
-        registry.register(
-            SettingSchema::new(
-                "custom_config",
-                "Custom configuration object",
-                SettingType::Object,
-                SettingCategory::Advanced,
-            ),
-        );
+        registry.register(SettingSchema::new(
+            "custom_config",
+            "Custom configuration object",
+            SettingType::Object,
+            SettingCategory::Advanced,
+        ));
 
         let applicator = SettingApplicator::new(registry);
 
@@ -1275,14 +1244,12 @@ mod tests {
     #[test]
     fn boolean_type_setting() {
         let mut registry = SettingSchemaRegistry::new();
-        registry.register(
-            SettingSchema::new(
-                "verbose",
-                "Enable verbose output",
-                SettingType::Boolean,
-                SettingCategory::Ux,
-            ),
-        );
+        registry.register(SettingSchema::new(
+            "verbose",
+            "Enable verbose output",
+            SettingType::Boolean,
+            SettingCategory::Ux,
+        ));
 
         let applicator = SettingApplicator::new(registry);
 
@@ -1290,28 +1257,27 @@ mod tests {
         settings.insert("verbose".to_string(), JsonValue::Bool(true));
 
         assert!(applicator.apply_global(settings).is_ok());
-        assert_eq!(applicator.get_effective("verbose"), Some(JsonValue::Bool(true)));
+        assert_eq!(
+            applicator.get_effective("verbose"),
+            Some(JsonValue::Bool(true))
+        );
     }
 
     #[test]
     fn registry_all_returns_all_schemas() {
         let mut registry = SettingSchemaRegistry::new();
-        registry.register(
-            SettingSchema::new(
-                "model",
-                "The model",
-                SettingType::String,
-                SettingCategory::Model,
-            ),
-        );
-        registry.register(
-            SettingSchema::new(
-                "temperature",
-                "Temperature",
-                SettingType::Number,
-                SettingCategory::Advanced,
-            ),
-        );
+        registry.register(SettingSchema::new(
+            "model",
+            "The model",
+            SettingType::String,
+            SettingCategory::Model,
+        ));
+        registry.register(SettingSchema::new(
+            "temperature",
+            "Temperature",
+            SettingType::Number,
+            SettingCategory::Advanced,
+        ));
 
         let all: Vec<_> = registry.all().collect();
         assert_eq!(all.len(), 2);
