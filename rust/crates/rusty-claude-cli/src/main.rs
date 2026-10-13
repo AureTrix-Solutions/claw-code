@@ -7895,15 +7895,23 @@ impl LiveCli {
         }
         let mut spinner = Spinner::new();
         let mut stdout = io::stdout();
-        spinner.tick(
-            if escape_monitor.is_some() {
-                "🦀 Thinking... (esc to interrupt)"
-            } else {
-                "🦀 Thinking..."
-            },
-            TerminalRenderer::new().color_theme(),
-            &mut stdout,
-        )?;
+        // The animated frame is cursor control: it saves the cursor, rewrites the
+        // current line, and restores the cursor. None of that describes anything
+        // when stdout is a pipe — the escapes survive as literal bytes and the
+        // banner ends up glued to whatever the emitter writes next. Only animate
+        // on a terminal; the one-shot completion line below is plain text and is
+        // emitted either way.
+        if io::stdout().is_terminal() {
+            spinner.tick(
+                if escape_monitor.is_some() {
+                    "🦀 Thinking... (esc to interrupt)"
+                } else {
+                    "🦀 Thinking..."
+                },
+                TerminalRenderer::new().color_theme(),
+                &mut stdout,
+            )?
+        }
         let result = runtime.run_turn(input, Some(&mut permission_prompter));
         if let Some(monitor) = escape_monitor {
             monitor.stop();
