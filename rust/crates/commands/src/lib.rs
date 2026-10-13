@@ -5499,7 +5499,7 @@ mod tests {
         render_agents_report_json, render_mcp_report_json_for, render_plugins_report,
         render_plugins_report_with_failures, render_skills_report, render_slash_command_help,
         render_slash_command_help_detail, resolve_skill_path, resume_supported_slash_commands,
-        slash_command_specs, skill_origin_id, skill_origin_json, suggest_slash_commands,
+        skill_origin_id, skill_origin_json, slash_command_specs, suggest_slash_commands,
         validate_slash_command_input, AgentCollection, DefinitionSource, SkillOrigin, SkillRoot,
         SkillSlashDispatch, SlashCommand,
     };
@@ -7328,8 +7328,8 @@ mod tests {
             .find(|r| r.origin == SkillOrigin::Bundled)
             .expect("should have bundled skills root");
 
-        let loaded_skills = load_skills_from_roots(&[bundled_root.clone()])
-            .expect("should load bundled skills");
+        let loaded_skills =
+            load_skills_from_roots(&[bundled_root.clone()]).expect("should load bundled skills");
 
         assert!(
             !loaded_skills.is_empty() || bundled_root.path.exists(),
