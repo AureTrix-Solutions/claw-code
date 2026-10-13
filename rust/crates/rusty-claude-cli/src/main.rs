@@ -1036,6 +1036,8 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             output_format,
         } => print_system_prompt(cwd, date, &model, output_format)?,
         CliAction::Version { output_format } => print_version(output_format)?,
+        CliAction::Tools { output_format } => print_tools(output_format)?,
+        CliAction::Info { output_format } => print_info(output_format)?,
         CliAction::ResumeSession {
             session_path,
             commands,
@@ -1195,6 +1197,12 @@ enum CliAction {
         output_format: CliOutputFormat,
     },
     Version {
+        output_format: CliOutputFormat,
+    },
+    Tools {
+        output_format: CliOutputFormat,
+    },
+    Info {
         output_format: CliOutputFormat,
     },
     SessionList {
@@ -2599,6 +2607,8 @@ fn parse_direct_slash_cli_action(
         Ok(Some(SlashCommand::Sandbox)) => Ok(CliAction::Sandbox { output_format }),
         Ok(Some(SlashCommand::Diff)) => Ok(CliAction::Diff { output_format }),
         Ok(Some(SlashCommand::Version)) => Ok(CliAction::Version { output_format }),
+        Ok(Some(SlashCommand::Tools)) => Ok(CliAction::Tools { output_format }),
+        Ok(Some(SlashCommand::Info)) => Ok(CliAction::Info { output_format }),
         Ok(Some(SlashCommand::Doctor)) => Ok(CliAction::Doctor {
             output_format,
             permission_mode,
@@ -5078,6 +5088,84 @@ fn version_json_value() -> serde_json::Value {
     })
 }
 
+fn print_tools(output_format: CliOutputFormat) -> Result<(), Box<dyn std::error::Error>> {
+    let specs = mvp_tool_specs();
+    match output_format {
+        CliOutputFormat::Text => {
+            println!("Available tools ({}):", specs.len());
+            for spec in &specs {
+                println!("  {}\n    {}", spec.name, spec.description);
+            }
+        }
+        CliOutputFormat::Json => {
+            let tools: Vec<_> = specs
+                .into_iter()
+                .map(|spec| {
+                    json!({
+                        "name": spec.name,
+                        "description": spec.description,
+                    })
+                })
+                .collect();
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&json!({
+                    "kind": "tools",
+                    "action": "list",
+                    "status": "ok",
+                    "tools": tools,
+                    "count": tools.len(),
+                }))?
+            );
+        }
+    }
+    Ok(())
+}
+
+fn print_info(output_format: CliOutputFormat) -> Result<(), Box<dyn std::error::Error>> {
+    let cwd = env::current_dir().ok();
+    let binary_provenance = binary_provenance_for(cwd.as_deref());
+    match output_format {
+        CliOutputFormat::Text => {
+            println!("claw-code runtime information:");
+            println!("  Version: {}", VERSION);
+            if let Some(sha) = &binary_provenance.git_sha_short {
+                println!("  Git SHA: {}", sha);
+            }
+            if let Some(branch) = &binary_provenance.branch {
+                println!("  Branch: {}", branch);
+            }
+            println!("  Commit date: {}", binary_provenance.commit_date);
+            println!("  Rustc version: {}", binary_provenance.rustc_version);
+            if let Some(target) = &binary_provenance.target {
+                println!("  Target: {}", target);
+            }
+            if let Some(path) = binary_provenance.executable_path {
+                println!("  Executable: {}", path);
+            }
+        }
+        CliOutputFormat::Json => {
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&json!({
+                    "kind": "info",
+                    "action": "show",
+                    "status": "ok",
+                    "version": VERSION,
+                    "git_sha": binary_provenance.git_sha,
+                    "git_sha_short": binary_provenance.git_sha_short,
+                    "branch": binary_provenance.branch,
+                    "commit_date": binary_provenance.commit_date,
+                    "rustc_version": binary_provenance.rustc_version,
+                    "target": binary_provenance.target,
+                    "executable_path": binary_provenance.executable_path,
+                }))?
+            );
+        }
+    }
+    Ok(())
+}
+
 #[allow(clippy::too_many_lines)]
 fn resume_session(session_path: &Path, commands: &[String], output_format: CliOutputFormat) {
     let session_reference = session_path.display().to_string();
@@ -6786,6 +6874,56 @@ fn run_resume_command(
             message: Some(render_version_report()),
             json: Some(version_json_value()),
         }),
+        SlashCommand::Tools => {
+            let specs = mvp_tool_specs();
+            let tool_count = specs.len();
+            let tools_text = specs
+                .iter()
+                .map(|spec| format!("  {}\n    {}", spec.name, spec.description))
+                .collect::<Vec<_>>()
+                .join("\n");
+            let message = format!("Available tools ({}):\n{}", tool_count, tools_text);
+            let json_tools: Vec<_> = specs
+                .into_iter()
+                .map(|spec| serde_json::json!({ "name": spec.name, "description": spec.description }))
+                .collect();
+            Ok(ResumeCommandOutcome {
+                session: session.clone(),
+                message: Some(message),
+                json: Some(serde_json::json!({
+                    "kind": "tools",
+                    "action": "list",
+                    "status": "ok",
+                    "tools": json_tools,
+                    "count": tool_count,
+                })),
+            })
+        }
+        SlashCommand::Info => {
+            let cwd = env::current_dir().ok();
+            let binary_provenance = binary_provenance_for(cwd.as_deref());
+            let message = format!(
+                "claw-code runtime information:\n  Version: {}\n  Git SHA: {}\n  Rustc: {}\n  Target: {}",
+                VERSION,
+                binary_provenance.git_sha_short.as_deref().unwrap_or("unknown"),
+                binary_provenance.rustc_version,
+                binary_provenance.target.as_deref().unwrap_or("unknown")
+            );
+            Ok(ResumeCommandOutcome {
+                session: session.clone(),
+                message: Some(message),
+                json: Some(serde_json::json!({
+                    "kind": "info",
+                    "action": "show",
+                    "status": "ok",
+                    "version": VERSION,
+                    "git_sha": binary_provenance.git_sha,
+                    "git_sha_short": binary_provenance.git_sha_short,
+                    "rustc_version": binary_provenance.rustc_version,
+                    "target": binary_provenance.target,
+                })),
+            })
+        }
         SlashCommand::Export { path } => {
             let export_path = resolve_export_path(path.as_deref(), session)?;
             fs::write(&export_path, render_export_text(session))?;
@@ -8328,6 +8466,18 @@ impl LiveCli {
             }
             SlashCommand::Version => {
                 Self::print_version(CliOutputFormat::Text);
+                false
+            }
+            SlashCommand::Tools => {
+                if let Err(error) = print_tools(CliOutputFormat::Text) {
+                    eprintln!("Tools: {error}");
+                }
+                false
+            }
+            SlashCommand::Info => {
+                if let Err(error) = print_info(CliOutputFormat::Text) {
+                    eprintln!("Info: {error}");
+                }
                 false
             }
             SlashCommand::Export { path } => {
