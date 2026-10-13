@@ -13,8 +13,10 @@
 
 pub mod error;
 pub mod frame;
+pub mod registry;
 pub mod transport;
 
 pub use error::{SdkError, SdkResult};
 pub use frame::{Frame, FrameType};
+pub use registry::{OperationMetadata, OperationRegistry, Schema};
 pub use transport::{SdkTransport, SdkTransportConfig};

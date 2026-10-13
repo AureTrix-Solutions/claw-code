@@ -205,6 +205,19 @@ impl Frame {
     pub fn byte_size(&self) -> usize {
         self.to_json().map(|s| s.len()).unwrap_or(0)
     }
+
+    /// Get the operation name from a broker request frame.
+    pub fn operation(&self) -> Option<String> {
+        self.data
+            .get("operation")
+            .and_then(Value::as_str)
+            .map(String::from)
+    }
+
+    /// Get the input value from a broker request frame.
+    pub fn input(&self) -> Option<Value> {
+        self.data.get("input").cloned()
+    }
 }
 
 #[cfg(test)]
@@ -254,5 +267,36 @@ mod tests {
         let (code, message) = frame.error().unwrap().unwrap();
         assert_eq!(code, "invalid_input");
         assert_eq!(message, "test error");
+    }
+
+    #[test]
+    fn frame_extracts_operation_from_broker_request() {
+        let frame = Frame::broker_request(
+            "test-id".to_string(),
+            "query.list_sessions".to_string(),
+            Value::Object(Map::new()),
+        );
+        assert_eq!(frame.operation(), Some("query.list_sessions".to_string()));
+    }
+
+    #[test]
+    fn frame_extracts_input_from_broker_request() {
+        let input = Value::Object({
+            let mut m = Map::new();
+            m.insert("session_id".to_string(), Value::String("123".to_string()));
+            m
+        });
+        let frame = Frame::broker_request(
+            "test-id".to_string(),
+            "query.get_session".to_string(),
+            input.clone(),
+        );
+        assert_eq!(frame.input(), Some(input));
+    }
+
+    #[test]
+    fn frame_without_operation_returns_none() {
+        let frame = Frame::broker_hello();
+        assert_eq!(frame.operation(), None);
     }
 }
