@@ -305,6 +305,11 @@ mod tests {
 
     #[test]
     fn provider_detection_prefers_model_family() {
+        let _lock = env_lock();
+        let _anthropic = EnvVarGuard::set("ANTHROPIC_API_KEY", None);
+        let _openai = EnvVarGuard::set("OPENAI_API_KEY", None);
+        let _xai = EnvVarGuard::set("XAI_API_KEY", None);
+
         assert_eq!(detect_provider_kind("grok-3"), ProviderKind::Xai);
         assert_eq!(
             detect_provider_kind("claude-sonnet-4-6"),
