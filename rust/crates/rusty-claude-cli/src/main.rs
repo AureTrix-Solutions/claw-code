@@ -12910,6 +12910,7 @@ fn provider_config_from_runtime(
         "anthropic" => api::ProviderConfigKind::Anthropic,
         "xai" => api::ProviderConfigKind::Xai,
         "openai" => api::ProviderConfigKind::OpenAi,
+        "custom-openai" => api::ProviderConfigKind::CustomOpenAi,
         "dashscope" => api::ProviderConfigKind::DashScope,
         other => {
             return Err(format!(
@@ -12947,6 +12948,7 @@ fn explicit_provider_kind_for_model(
         Some("anthropic") => Some(api::ProviderConfigKind::Anthropic),
         Some("xai") => Some(api::ProviderConfigKind::Xai),
         Some("openai") | Some("local") => Some(api::ProviderConfigKind::OpenAi),
+        Some("custom-openai") => Some(api::ProviderConfigKind::CustomOpenAi),
         Some("dashscope") | Some("qwen") | Some("kimi") => Some(api::ProviderConfigKind::DashScope),
         _ => {
             let lower = resolved_model.to_ascii_lowercase();
@@ -19665,6 +19667,22 @@ UU conflicted.rs",
             Some(api::ProviderConfigKind::OpenAi)
         );
         assert_eq!(
+            super::explicit_provider_kind_for_model("custom-openai/local-model", &config.model),
+            Some(api::ProviderConfigKind::CustomOpenAi)
+        );
+        assert_eq!(
+            super::explicit_provider_kind_for_model("CUSTOM-OPENAI/local-model", &config.model),
+            Some(api::ProviderConfigKind::CustomOpenAi)
+        );
+        assert_eq!(
+            super::explicit_provider_kind_for_model(
+                "custom-openai/local-model",
+                "custom-openai/local-model"
+            ),
+            None,
+            "matching custom model must keep the persisted provider kind"
+        );
+        assert_eq!(
             super::explicit_provider_kind_for_model("qwen-plus", &config.model),
             None,
             "matching persisted model must keep the persisted provider kind"
@@ -19702,6 +19720,44 @@ UU conflicted.rs",
                 "explicit OpenAI model prefix must override persisted DashScope configuration, got {other:?}"
             ),
         }
+    }
+
+    #[test]
+    fn persisted_custom_openai_configuration_survives_runtime_boundary() {
+        let config_home = temp_dir();
+        let workspace = temp_dir();
+        fs::create_dir_all(&config_home).expect("config home");
+        fs::create_dir_all(&workspace).expect("workspace");
+        fs::write(
+            config_home.join("settings.json"),
+            r#"{
+              "provider": {
+                "kind": "custom-openai",
+                "apiKey": "custom-test-key",
+                "baseUrl": "https://custom.example/v1",
+                "model": "local-model"
+              },
+              "model": "local-model"
+            }"#,
+        )
+        .expect("write provider settings");
+
+        let loader = ConfigLoader::new(&workspace, &config_home);
+        let runtime_config = loader.load().expect("runtime config should load");
+        let provider_config = super::provider_config_from_runtime(runtime_config.provider())
+            .expect("custom provider configuration should adapt")
+            .expect("persisted provider configuration should be present");
+
+        assert_eq!(provider_config.kind, api::ProviderConfigKind::CustomOpenAi);
+        assert_eq!(provider_config.model, "local-model");
+        assert_eq!(provider_config.api_key.as_deref(), Some("custom-test-key"));
+        assert_eq!(
+            provider_config.base_url.as_deref(),
+            Some("https://custom.example/v1")
+        );
+
+        let _ = fs::remove_dir_all(config_home);
+        let _ = fs::remove_dir_all(workspace);
     }
 
     #[test]

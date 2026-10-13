@@ -42,6 +42,7 @@ pub struct OpenAiCompatConfig {
 
 const XAI_ENV_VARS: &[&str] = &["XAI_API_KEY"];
 const OPENAI_ENV_VARS: &[&str] = &["OPENAI_API_KEY"];
+const CUSTOM_OPENAI_ENV_VARS: &[&str] = &["CLAWCUSTOMOPENAI_API_KEY"];
 const DASHSCOPE_ENV_VARS: &[&str] = &["DASHSCOPE_API_KEY"];
 
 // Provider-specific request body size limits in bytes
@@ -80,6 +81,18 @@ impl OpenAiCompatConfig {
         }
     }
 
+    /// OpenAI-compatible endpoint with its own environment namespace and no default URL.
+    #[must_use]
+    pub const fn custom_openai() -> Self {
+        Self {
+            provider_name: "Custom OpenAI",
+            api_key_env: "CLAWCUSTOMOPENAI_API_KEY",
+            base_url_env: "CLAWCUSTOMOPENAI_BASE_URL",
+            default_base_url: "",
+            max_request_body_bytes: OPENAI_MAX_REQUEST_BODY_BYTES,
+        }
+    }
+
     /// Alibaba `DashScope` compatible-mode endpoint (Qwen family models).
     /// Uses the OpenAI-compatible REST shape at /compatible-mode/v1.
     /// Requested via Discord #clawcode-get-help: native Alibaba API for
@@ -100,6 +113,7 @@ impl OpenAiCompatConfig {
         match self.provider_name {
             "xAI" => XAI_ENV_VARS,
             "OpenAI" => OPENAI_ENV_VARS,
+            "Custom OpenAI" => CUSTOM_OPENAI_ENV_VARS,
             "DashScope" => DASHSCOPE_ENV_VARS,
             _ => &[],
         }
