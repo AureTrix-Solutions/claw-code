@@ -453,7 +453,7 @@ fn direct_resume_safe_slash_commands_route_to_local_json_actions_831() {
 
     for (command, expected_kind, expected_status) in [
         ("/version", "version", "ok"),
-        ("/sandbox", "sandbox", "warn"),
+        ("/sandbox", "sandbox", "ok"),
         ("/diff", "diff", "ok"),
         ("/status", "status", "ok"),
     ] {
