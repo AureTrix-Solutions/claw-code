@@ -122,7 +122,88 @@ pub fn pricing_for_model(model: &str) -> Option<ModelPricing> {
     {
         return Some(ModelPricing::per_million(0.3, 1.2, 0.3, 0.006));
     }
-    None
+    openai_compatible_pricing(&normalized)
+}
+
+/// xAI bills slugs retired on 2026-05-15 at grok-4.3 rates
+/// (<https://docs.x.ai/developers/migration/may-15-retirement>).
+const GROK_4_3: [f64; 4] = [1.25, 2.5, 1.25, 0.2];
+const GROK_BUILD: [f64; 4] = [1.0, 2.0, 1.0, 0.2];
+
+/// Input, output, cache-write and cache-read rates per MTok for models served through
+/// OpenAI-compatible providers, keyed by model id.
+///
+/// An id also matches its dated snapshots and `-latest` alias (e.g. `gpt-4.1-2025-04-14`),
+/// so a specific snapshot must precede its base id. Long-context and higher input tiers
+/// are not modeled because usage is aggregated across requests. Cache writes without a
+/// separate charge, and models without a cached-input discount, use the input rate.
+const OPENAI_COMPATIBLE_PRICING: &[(&str, [f64; 4])] = &[
+    // OpenAI standard tier (<https://developers.openai.com/api/docs/pricing>).
+    ("gpt-6-astra", [10.0, 50.0, 12.5, 1.0]),
+    ("gpt-6.1-sol", [2.0, 10.0, 2.5, 0.1]),
+    ("gpt-6-sol", [2.0, 10.0, 2.5, 0.2]),
+    ("gpt-6-luna", [0.1, 0.5, 0.125, 0.01]),
+    ("gpt-5.6-sol", [4.0, 20.0, 5.0, 0.4]),
+    ("gpt-5.6-terra", [2.0, 12.0, 2.5, 0.2]),
+    ("gpt-5.6-luna", [0.2, 1.2, 0.25, 0.02]),
+    ("gpt-5.5", [5.0, 30.0, 5.0, 0.5]),
+    ("gpt-5.4", [2.5, 15.0, 2.5, 0.25]),
+    ("gpt-5.4-mini", [0.75, 4.5, 0.75, 0.075]),
+    ("gpt-5.4-nano", [0.2, 1.25, 0.2, 0.02]),
+    ("gpt-5.2", [1.75, 14.0, 1.75, 0.175]),
+    ("gpt-5.1", [1.25, 10.0, 1.25, 0.125]),
+    ("gpt-5", [1.25, 10.0, 1.25, 0.125]),
+    ("gpt-5-mini", [0.25, 2.0, 0.25, 0.025]),
+    ("gpt-5-nano", [0.05, 0.4, 0.05, 0.005]),
+    ("gpt-4.1", [2.0, 8.0, 2.0, 0.5]),
+    ("gpt-4.1-mini", [0.4, 1.6, 0.4, 0.1]),
+    ("gpt-4.1-nano", [0.1, 0.4, 0.1, 0.025]),
+    ("gpt-4o-2024-05-13", [5.0, 15.0, 5.0, 5.0]),
+    ("gpt-4o", [2.5, 10.0, 2.5, 1.25]),
+    ("gpt-4o-mini", [0.15, 0.6, 0.15, 0.075]),
+    ("o1", [15.0, 60.0, 15.0, 7.5]),
+    ("o3", [2.0, 8.0, 2.0, 0.5]),
+    ("o3-mini", [1.1, 4.4, 1.1, 0.55]),
+    ("o4-mini", [1.1, 4.4, 1.1, 0.275]),
+    // xAI (<https://docs.x.ai/docs/models>).
+    ("grok-4.7", [2.0, 6.0, 2.0, 0.5]),
+    ("grok-4.6", [2.0, 6.0, 2.0, 0.5]),
+    ("grok-4.5", [2.0, 6.0, 2.0, 0.3]),
+    ("grok-4.3", GROK_4_3),
+    ("grok-4.20", GROK_4_3),
+    ("grok-4.20-reasoning", GROK_4_3),
+    ("grok-4.20-non-reasoning", GROK_4_3),
+    ("grok-4.20-multi-agent", GROK_4_3),
+    ("grok-build", GROK_BUILD),
+    ("grok-code-fast", GROK_BUILD),
+    ("grok-4", GROK_4_3),
+    ("grok-4-fast-reasoning", GROK_4_3),
+    ("grok-4-fast-non-reasoning", GROK_4_3),
+    ("grok-3", GROK_4_3),
+    // Alibaba Model Studio, China (Beijing) region, which is claw's default DashScope
+    // endpoint (<https://www.alibabacloud.com/help/en/model-studio/model-pricing>).
+    // Non-thinking output; implicit cache hits bill at 20% of input.
+    ("qwen-max", [0.345, 1.377, 0.345, 0.069]),
+    ("qwen-plus", [0.115, 0.287, 0.115, 0.023]),
+    ("qwen-flash", [0.022, 0.216, 0.022, 0.0044]),
+    ("kimi-k2.5", [0.574, 3.011, 0.574, 0.1148]),
+];
+
+fn openai_compatible_pricing(normalized: &str) -> Option<ModelPricing> {
+    let id = normalized.rsplit_once('/').map_or(normalized, |(_, id)| id);
+    OPENAI_COMPATIBLE_PRICING
+        .iter()
+        .find(|(model, _)| {
+            id.strip_prefix(model).is_some_and(|rest| {
+                rest.is_empty()
+                    || rest.strip_prefix('-').is_some_and(|suffix| {
+                        suffix == "latest" || suffix.starts_with(|c: char| c.is_ascii_digit())
+                    })
+            })
+        })
+        .map(|&(_, [input, output, cache_write, cache_read])| {
+            ModelPricing::per_million(input, output, cache_write, cache_read)
+        })
 }
 
 /// Parses the `(major, minor)` version after `family` in ids such as
@@ -394,6 +475,46 @@ mod tests {
         assert_eq!(total_for("deepseek-reasoner"), "$0.9060");
         // Third-party hosts set their own prices for other DeepSeek models.
         assert_eq!(pricing_for_model("deepseek-r1"), None);
+    }
+
+    #[test]
+    fn prices_openai_compatible_provider_models() {
+        let usage = TokenUsage {
+            input_tokens: 1_000_000,
+            output_tokens: 500_000,
+            cache_creation_input_tokens: 0,
+            cache_read_input_tokens: 1_000_000,
+        };
+        let total_for = |model: &str| {
+            let pricing = pricing_for_model(model).expect("known model pricing");
+            format_usd(
+                usage
+                    .estimate_cost_usd_with_pricing(pricing)
+                    .total_cost_usd(),
+            )
+        };
+
+        assert_eq!(total_for("gpt-5.4-mini"), "$3.0750");
+        assert_eq!(total_for("openai/gpt-4.1-2025-04-14"), "$6.5000");
+        assert_eq!(total_for("gpt-4o-2024-08-06"), "$8.7500");
+        assert_eq!(total_for("gpt-4o-2024-05-13"), "$17.5000");
+        assert_eq!(total_for("o3-mini"), "$3.8500");
+        assert_eq!(total_for("grok-4.3"), "$2.7000");
+        // Retired xAI slugs are billed as grok-4.3.
+        assert_eq!(total_for("grok-3"), "$2.7000");
+        assert_eq!(total_for("grok-4-1-fast-reasoning"), "$2.7000");
+        assert_eq!(total_for("grok-code-fast-1"), "$2.2000");
+        assert_eq!(total_for("qwen/qwen-max"), "$1.1025");
+        assert_eq!(total_for("qwen-plus-latest"), "$0.2815");
+        assert_eq!(total_for("kimi-k2.5"), "$2.1943");
+        for unpriced in [
+            "o1-mini",
+            "grok-3-mini",
+            "qwen-turbo",
+            "qwen-plus-character",
+        ] {
+            assert_eq!(pricing_for_model(unpriced), None, "{unpriced}");
+        }
     }
 
     #[test]
