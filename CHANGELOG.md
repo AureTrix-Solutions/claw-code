@@ -5,6 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.7] - 2026-10-19
+
+### Added
+
+- Parallel tool-result pairing with concurrent execution support
+- Explicit session model naming in system prompt for clarity
+- Custom OpenAI provider namespace support (separate environment variables)
+
+### Fixed
+
+- Stop duplicating thinking blocks in streamed responses (#3355)
+- Non-UTF-8 environment variable handling to skip instead of panic (#3356)
+- Parallel tool-result ordering by call index to fix provider 400 errors (#3360, #3361)
+- Windows build cfg-gating for non-Windows hook Path import (#3302)
+
+### Changed
+
+- Updated Anthropic and DeepSeek model pricing (#3357)
+- Updated OpenAI, X.AI, and DashScope model pricing (#3358)
+- Enhanced credential hint for non-Anthropic ANTHROPIC_BASE_URL usage
+- Terminal-scope path length limit enforcement
+
+### Known Limitations
+
+- ACP / Zed integration is not yet implemented (status stub available via `claw acp`)
+- Python porting workspace is for reference only, not used in production
+
 ## [0.1.6] - 2026-10-13
 
 ### Added
