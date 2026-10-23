@@ -3528,16 +3528,26 @@ fn execute_web_search(input: &WebSearchInput) -> Result<WebSearchOutput, String>
     let client = build_http_client()?;
     let search_url = build_search_url(&input.query)?;
     let response = client
-        .get(search_url)
+        .get(search_url.as_str())
         .send()
         .map_err(|error| error.to_string())?;
+
+    // DuckDuckGo answers its bot challenge with HTTP 202 and a page without
+    // results, so anything but 200 is an unusable results page.
+    let status = response.status();
+    if status != reqwest::StatusCode::OK {
+        return Err(format!(
+            "Web search unavailable (HTTP {}) - the search provider is blocked or unreachable",
+            status.as_u16()
+        ));
+    }
 
     let final_url = response.url().clone();
     let html = response.text().map_err(|error| error.to_string())?;
     let mut hits = extract_search_hits(&html);
 
     if hits.is_empty() && final_url.host_str().is_some() {
-        hits = extract_search_hits_from_generic_links(&html);
+        hits = extract_search_hits_from_generic_links(&html, search_url.host_str());
     }
 
     if let Some(allowed) = input.allowed_domains.as_ref() {
@@ -3760,7 +3770,7 @@ fn extract_search_hits(html: &str) -> Vec<SearchHit> {
     hits
 }
 
-fn extract_search_hits_from_generic_links(html: &str) -> Vec<SearchHit> {
+fn extract_search_hits_from_generic_links(html: &str, search_host: Option<&str>) -> Vec<SearchHit> {
     let mut hits = Vec::new();
     let mut remaining = html;
 
@@ -3791,6 +3801,11 @@ fn extract_search_hits_from_generic_links(html: &str) -> Vec<SearchHit> {
         }
         let decoded_url = decode_duckduckgo_redirect(&url).unwrap_or(url);
         if decoded_url.starts_with("http://") || decoded_url.starts_with("https://") {
+            if is_search_engine_link(&decoded_url, search_host) {
+                remaining = &after_tag[end_anchor_idx + 4..];
+                continue;
+            }
+
             hits.push(SearchHit {
                 title: title.trim().to_string(),
                 url: decoded_url,
@@ -3871,6 +3886,20 @@ fn normalize_domain_filter(domain: &str) -> String {
         .trim_start_matches('.')
         .trim_end_matches('/')
         .to_ascii_lowercase()
+}
+
+/// A generic-fallback link that points back at DuckDuckGo or at the configured
+/// search host is page chrome (home, settings, challenge), never a result.
+fn is_search_engine_link(url: &str, search_host: Option<&str>) -> bool {
+    let Some(host) = reqwest::Url::parse(url)
+        .ok()
+        .and_then(|parsed| parsed.host_str().map(str::to_ascii_lowercase))
+    else {
+        return false;
+    };
+    host == "duckduckgo.com"
+        || host.ends_with(".duckduckgo.com")
+        || search_host.is_some_and(|search_host| host.eq_ignore_ascii_case(search_host))
 }
 
 fn dedupe_hits(hits: &mut Vec<SearchHit>) {
@@ -8271,6 +8300,112 @@ mod tests {
         assert_eq!(content.len(), 1);
         assert_eq!(content[0]["title"], "Tokio Docs");
         assert_eq!(content[0]["url"], "https://docs.rs/tokio");
+    }
+
+    #[test]
+    fn web_search_returns_error_on_non_2xx_response() {
+        let _guard = env_lock()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let server = TestServer::spawn(Arc::new(|request_line: &str| {
+            assert!(request_line.contains("GET /search?q=test"));
+            // Simulate rate-limited/blocked response (HTTP 429)
+            HttpResponse::html(
+                429,
+                "Too Many Requests",
+                "<html><body>\n                  <p>Too many requests. Please try again later.</p>\n                </body></html>",
+            )
+        }));
+
+        std::env::set_var(
+            "CLAWD_WEB_SEARCH_BASE_URL",
+            format!("http://{}/search", server.addr()),
+        );
+        let error = execute_tool("WebSearch", &json!({ "query": "test" }))
+            .expect_err("non-2xx response should fail");
+        std::env::remove_var("CLAWD_WEB_SEARCH_BASE_URL");
+
+        assert!(error.contains("Web search unavailable"));
+        assert!(error.contains("429"));
+    }
+
+    #[test]
+    fn web_search_rejects_duckduckgo_202_challenge_page() {
+        let _guard = env_lock()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let server = TestServer::spawn(Arc::new(|request_line: &str| {
+            assert!(request_line.contains("GET /html/?q=challenge "));
+            HttpResponse::html(
+                202,
+                "Accepted",
+                r#"
+                <html><body>
+                  <a href="/html/">DuckDuckGo</a>
+                  <a href="https://duckduckgo.com/">Home</a>
+                  <p>Unfortunately, bots use DuckDuckGo too.</p>
+                </body></html>
+                "#,
+            )
+        }));
+
+        std::env::set_var(
+            "CLAWD_WEB_SEARCH_BASE_URL",
+            format!("http://{}/html/", server.addr()),
+        );
+        let error = execute_tool("WebSearch", &json!({ "query": "challenge" }))
+            .expect_err("a 202 challenge page must not produce results");
+        std::env::remove_var("CLAWD_WEB_SEARCH_BASE_URL");
+
+        assert!(
+            error.contains("Web search unavailable (HTTP 202)"),
+            "{error}"
+        );
+    }
+
+    #[test]
+    fn web_search_generic_fallback_drops_search_engine_links() {
+        let _guard = env_lock()
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let server = TestServer::spawn(Arc::new(|request_line: &str| {
+            assert!(request_line.contains("GET /search?q=chrome+links "));
+            HttpResponse::html(
+                200,
+                "OK",
+                r#"
+                <html><body>
+                  <a href="/html/">DuckDuckGo</a>
+                  <a href="https://html.duckduckgo.com/html/?q=x">Next page</a>
+                  <a href="https://duckduckgo.com/settings">Settings</a>
+                  <a href="https://docs.rs/serde">Serde Docs</a>
+                  <a href="https://tokio.rs/">Tokio</a>
+                </body></html>
+                "#,
+            )
+        }));
+
+        std::env::set_var(
+            "CLAWD_WEB_SEARCH_BASE_URL",
+            format!("http://{}/search", server.addr()),
+        );
+        let result = execute_tool("WebSearch", &json!({ "query": "chrome links" }))
+            .expect("WebSearch fallback parsing should succeed");
+        std::env::remove_var("CLAWD_WEB_SEARCH_BASE_URL");
+
+        let output: serde_json::Value = serde_json::from_str(&result).expect("valid json");
+        let content = output["results"]
+            .as_array()
+            .expect("results array")
+            .iter()
+            .find_map(|item| item.get("content"))
+            .and_then(serde_json::Value::as_array)
+            .expect("search result block present");
+        let urls: Vec<&str> = content
+            .iter()
+            .map(|hit| hit["url"].as_str().expect("url"))
+            .collect();
+        assert_eq!(urls, ["https://docs.rs/serde", "https://tokio.rs/"]);
     }
 
     #[test]
